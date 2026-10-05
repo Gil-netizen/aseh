@@ -1,0 +1,76 @@
+name: Bug report
+description: Report a reproducible problem in ASEH.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting a problem. Do not include API keys, private case material, or personal information. Report security issues through the private link in the issue-template chooser.
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe the observed behavior and why it is a problem.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: Describe what you expected ASEH to do.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Provide the smallest reliable sequence that reproduces the problem.
+      placeholder: |
+        1. Open ...
+        2. Select ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: ASEH version or commit
+      placeholder: v0.1.0-alpha.1 or commit SHA
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include device or emulator, Android version/API level, locale, text direction, and relevant settings.
+    validations:
+      required: true
+  - type: dropdown
+    id: offline
+    attributes:
+      label: Network state
+      options:
+        - Offline or airplane mode
+        - Online
+        - Both
+        - Unknown
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Supporting evidence
+      description: Add redacted logs, screenshots, recordings, or source/citation details. Drag files into this field if needed.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Submission checks
+      options:
+        - label: I searched existing issues for this problem.
+          required: true
+        - label: I removed secrets, private case material, and personal information.
+          required: true
+        - label: This is not a vulnerability requiring private disclosure.
+          required: true

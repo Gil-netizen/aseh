@@ -1,0 +1,137 @@
+name: Repository policy
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repository-policy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  policy:
+    name: Links and secret patterns
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Check Markdown links
+        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2
+        with:
+          args: --verbose --no-progress --exclude-all-private './**/*.md'
+          fail: true
+          jobSummary: true
+
+      - name: Reject common committed secret patterns
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+          import re
+          import subprocess
+          import sys
+
+          patterns = {
+              "private key block": re.compile(
+                  rb"-----BEGIN\s+(?:(?:RSA|DSA|EC|OPENSSH|ENCRYPTED|PGP)\s+)?PRIVATE\s+KEY(?:\s+BLOCK)?-----"
+              ),
+              "GitHub token": re.compile(rb"(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{70,})"),
+              "OpenAI API key": re.compile(rb"sk-(?:proj-)?[A-Za-z0-9_-]{20,}"),
+              "Slack token": re.compile(rb"xox[baprs]-[A-Za-z0-9-]{20,}"),
+              "AWS access key": re.compile(rb"(?:AKIA|ASIA)[0-9A-Z]{16}"),
+              "Google API key": re.compile(rb"AIza[0-9A-Za-z_-]{35}"),
+              "Stripe live secret": re.compile(rb"sk_live_[0-9A-Za-z]{16,}"),
+              "assigned secret": re.compile(
+                  rb"(?i)\b[A-Z0-9_-]*(?:api[_-]?key|client[_-]?secret|secret[_-]?access[_-]?key|access[_-]?token|service[_-]?role[_-]?key|auth[_-]?token|store[_-]?password|keystore[_-]?password)[A-Z0-9_-]*\s*[:=]\s*[\"']?[^\s\"'\r\n]{12,}"
+              ),
+          }
+
+          forbidden_suffixes = {
+              ".asehcase", ".jks", ".keystore", ".p12", ".pfx", ".pem", ".key",
+          }
+
+          def scan_bytes(label, data, findings):
+              for pattern_label, pattern in patterns.items():
+                  if pattern.search(data):
+                      findings.append((label, pattern_label))
+
+          tracked = subprocess.check_output(["git", "ls-files", "-z"]).split(b"\0")
+          findings = []
+          for raw_path in tracked:
+              if not raw_path:
+                  continue
+              path = Path(raw_path.decode("utf-8", errors="surrogateescape"))
+              try:
+                  data = path.read_bytes()
+              except OSError as exc:
+                  print(f"Unable to scan {path}: {exc}", file=sys.stderr)
+                  sys.exit(2)
+              if path.suffix.lower() in forbidden_suffixes:
+                  findings.append((str(path), "forbidden secret-bearing artifact type"))
+              if len(data) > 50_000_000:
+                  findings.append((str(path), "file exceeds the 50 MB policy scan limit"))
+                  continue
+              scan_bytes(str(path), data, findings)
+
+          event_name = os.environ.get("GITHUB_EVENT_NAME", "")
+          if event_name == "pull_request":
+              base = os.environ.get("GITHUB_BASE_SHA", "")
+              head = os.environ.get("GITHUB_HEAD_SHA", "HEAD")
+          else:
+              base = os.environ.get("GITHUB_EVENT_BEFORE", "")
+              head = os.environ.get("GITHUB_SHA", "HEAD")
+
+          zero = "0" * 40
+          revision = head if not base or base == zero else f"{base}..{head}"
+          objects = subprocess.check_output(
+              ["git", "rev-list", "--objects", revision], stderr=subprocess.STDOUT
+          ).splitlines()
+          scanned_blobs = set()
+          for entry in objects:
+              oid, _, raw_name = entry.partition(b" ")
+              if not oid or oid in scanned_blobs:
+                  continue
+              object_type = subprocess.check_output(
+                  ["git", "cat-file", "-t", oid.decode("ascii")]
+              ).strip()
+              if object_type != b"blob":
+                  continue
+              scanned_blobs.add(oid)
+              size = int(subprocess.check_output(
+                  ["git", "cat-file", "-s", oid.decode("ascii")]
+              ))
+              name = raw_name.decode("utf-8", errors="replace") or oid.decode("ascii")
+              if Path(name).suffix.lower() in forbidden_suffixes:
+                  findings.append((name, "forbidden secret-bearing artifact in new commit history"))
+              if size > 50_000_000:
+                  findings.append((name, "blob exceeds the 50 MB history scan limit"))
+                  continue
+              data = subprocess.check_output(["git", "cat-file", "blob", oid.decode("ascii")])
+              scan_bytes(f"history:{name}", data, findings)
+
+          if findings:
+              print("Potential committed secrets detected. Values are intentionally not printed:", file=sys.stderr)
+              for path, label in findings:
+                  print(f"- {path}: {label}", file=sys.stderr)
+              print("Remove and rotate any real credential before retrying.", file=sys.stderr)
+              sys.exit(1)
+
+          print(
+              f"Scanned {len(tracked) - 1} tracked files and "
+              f"{len(scanned_blobs)} new-history blobs; no forbidden secret pattern was found."
+          )
+          PY
+        env:
+          GITHUB_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          GITHUB_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          GITHUB_EVENT_BEFORE: ${{ github.event.before }}

@@ -1,0 +1,84 @@
+name: Content or source change
+description: Propose a correction or addition to texts, translations, citations, practices, liturgy, or rules.
+title: "[Content]: "
+labels:
+  - content
+  - needs-editorial-review
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Content changes must be traceable to exact, legally usable sources. AI output and search summaries are not source evidence.
+  - type: textarea
+    id: current
+    attributes:
+      label: Current content or behavior
+      description: Quote or identify the exact text, rule, citation, or generated behavior to be changed.
+    validations:
+      required: true
+  - type: textarea
+    id: proposed
+    attributes:
+      label: Proposed change
+      description: Provide the proposed wording, data, translation, or rule behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: provenance
+    attributes:
+      label: Source provenance
+      description: List title, author or issuing body, exact edition/version, stable URL or bibliographic reference, and chapter/section/page/folio for every supporting source.
+    validations:
+      required: true
+  - type: textarea
+    id: translation
+    attributes:
+      label: Language and translation details
+      description: Include the original-language text when relevant, translator attribution, and whether the translation is quoted, adapted, or newly produced.
+    validations:
+      required: true
+  - type: textarea
+    id: rights
+    attributes:
+      label: License or permission
+      description: State the exact license, public-domain basis, or written permission and link the applicable rights statement.
+    validations:
+      required: true
+  - type: textarea
+    id: analysis
+    attributes:
+      label: Evidentiary analysis
+      description: Explain what each source supports, material limitations, dissenting views, and why the proposed representation is fair.
+    validations:
+      required: true
+  - type: dropdown
+    id: consequence
+    attributes:
+      label: Consequence classification
+      description: High-consequence and uncertain changes require two distinct named human reviewers.
+      options:
+        - Ordinary content
+        - High-consequence content
+        - Uncertain; treat as high consequence
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: User-facing impact and validation
+      description: Describe where the change appears, what it may cause a user to do, and how it can be verified.
+    validations:
+      required: true
+  - type: checkboxes
+    id: attestation
+    attributes:
+      label: Contributor attestation
+      options:
+        - label: I checked every quotation and citation against the named edition.
+          required: true
+        - label: I have the right to submit the proposed text or data under the stated terms.
+          required: true
+        - label: I disclosed uncertainty and material disagreement.
+          required: true
+        - label: I understand that high-consequence content may merge only as Drafted/CasePreparation material excluded from distributable packs, and cannot become Approved or Published without two qualifying named human approvals bound to its digest.
+          required: true

@@ -1,0 +1,19 @@
+# The repository owner reviews changes across code, content, policy, and release configuration.
+* @Gil-netizen
+
+# Make ownership of governance and security-sensitive automation explicit.
+/.github/ @Gil-netizen
+/CONTRIBUTING.md @Gil-netizen
+/CODE_OF_CONDUCT.md @Gil-netizen
+/SECURITY.md @Gil-netizen
+
+# Source, corpus, editorial, privacy, security, and release boundaries.
+/content/ @Gil-netizen
+/docs/SOURCE_POLICY.md @Gil-netizen
+/docs/DATA_LICENSES.md @Gil-netizen
+/docs/METHOD.md @Gil-netizen
+/docs/EDITORIAL_POLICY.md @Gil-netizen
+/docs/PRIVACY_MODEL.md @Gil-netizen
+/docs/THREAT_MODEL.md @Gil-netizen
+/docs/RELEASE.md @Gil-netizen
+/docs/adr/ @Gil-netizen
