@@ -1,0 +1,33 @@
+# Gradle and Android
+.gradle/
+build/
+**/build/
+local.properties
+.idea/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Signing and secrets
+*.jks
+*.keystore
+*.p12
+*.pem
+*.key
+*.secrets.*
+.env
+.env.*
+!.env.example
+
+# Operating systems and editors
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Generated ASEH artifacts
+*.asehpack
+*.asehcase
+dist/
+reports/
