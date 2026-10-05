@@ -1,6 +1,8 @@
 # ASEH Source and Corpus Policy
 
-Status: Draft for human approval
+Status: Approved
+
+Approved by: Gil on 2026-10-06 in [pull request #2](https://github.com/Gil-netizen/aseh/pull/2)
 
 Applies to: source acquisition, editions, citations, normalization, packs, translations, media, and relationship data
 

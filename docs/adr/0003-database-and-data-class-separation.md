@@ -1,8 +1,9 @@
 # ADR-0003: Database and data-class separation
 
-- **Status:** Proposed for human approval
+- **Status:** Accepted
+- **Accepted:** Gil on 2026-10-06 in [pull request #2](https://github.com/Gil-netizen/aseh/pull/2)
 - **Date:** 2026-10-06
-- **Owner:** Gil (`@Gil-netizen`); reviewers: future Android data, privacy, and corpus maintainers
+- **Owner:** Gil (`@Gil-netizen`); future re-review roles: Android data, privacy, and corpus maintainers
 - **Decision scope:** `core:database`, `core:security`, `data:corpus`, `data:practice`, `data:community`, search and repository interfaces
 - **Supersedes:** none
 - **Related:** [Privacy model](../PRIVACY_MODEL.md), [Threat model](../THREAT_MODEL.md), [Source policy](../SOURCE_POLICY.md), [ADR-0001](0001-sensitive-storage-and-case-export-cryptography.md)

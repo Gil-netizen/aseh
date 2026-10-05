@@ -6,13 +6,13 @@ ASEH is an offline-first Android project for contextual prayer, practical Jewish
 
 ## Current status
 
-The repository is in **Phase 0: constitution, rights, safety, and repository contract**. The proposed canonical documents are ready for human review before Android scaffolding begins. No application build is released yet.
+The **Phase 0 repository contract was approved by Gil on 2026-10-06 in [pull request #2](https://github.com/Gil-netizen/aseh/pull/2)**. Android implementation begins after the owner merges that contract. No application build is released yet.
 
 ## Alpha target
 
 Implementation begins with a weekday individual-prayer foundation. The first public alpha will extend it into a complete Shabbat-morning beit-knesset experience for a small emerging qahal. It will work offline in Hebrew and English and include preparation, context-built liturgy, role views, exact citations, print output, a disputed-practice workflow, and source-bound AI.
 
-## Proposed canonical documents
+## Canonical documents
 
 - Product and scope: `docs/PRODUCT.md`
 - Method and source layers: `docs/METHOD.md`

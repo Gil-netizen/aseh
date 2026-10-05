@@ -1,8 +1,9 @@
 # ADR-0002: Provider boundary and OpenAI Responses adapter
 
-- **Status:** Proposed for human approval
+- **Status:** Accepted
+- **Accepted:** Gil on 2026-10-06 in [pull request #2](https://github.com/Gil-netizen/aseh/pull/2)
 - **Date:** 2026-10-06
-- **Owner:** Gil (`@Gil-netizen`); reviewers: future AI safety, privacy, and Android network maintainers
+- **Owner:** Gil (`@Gil-netizen`); future re-review roles: AI safety, privacy, and Android network maintainers
 - **Decision scope:** `data:ai`, provider configuration, outbound payloads, answer verification, high-consequence routing
 - **Supersedes:** none
 - **Related:** [Privacy model](../PRIVACY_MODEL.md), [Threat model](../THREAT_MODEL.md), [Method](../METHOD.md), [Editorial policy](../EDITORIAL_POLICY.md)

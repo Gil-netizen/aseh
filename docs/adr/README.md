@@ -73,7 +73,7 @@ Name the tests or evidence that demonstrate the decision is implemented.
 
 ## Index
 
-The following records are proposed in the Phase 0 repository-contract pull request. None is accepted until a named human records approval:
+The following records were accepted by Gil on 2026-10-06 in [pull request #2](https://github.com/Gil-netizen/aseh/pull/2):
 
 - [ADR-0001: Sensitive storage and case-export cryptography](0001-sensitive-storage-and-case-export-cryptography.md)
 - [ADR-0002: Provider boundary and OpenAI Responses adapter](0002-provider-boundary-and-openai-responses.md)
@@ -82,5 +82,5 @@ The following records are proposed in the Phase 0 repository-contract pull reque
 - [ADR-0005: Pinned Android bootstrap toolchain](0005-pinned-android-toolchain.md)
 
 The Android module layout remains for the scaffolding ExecPlan. Scaffolding may
-depend on the compatibility set in ADR-0005 only after that ADR receives named
-human approval; a demonstrated incompatibility requires a superseding ADR.
+depend on the accepted compatibility set in ADR-0005; a demonstrated
+incompatibility requires a superseding ADR.

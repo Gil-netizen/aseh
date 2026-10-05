@@ -1,6 +1,7 @@
 # ASEH Release Policy
 
-**Status:** Proposed for human approval\
+**Status:** Approved\
+**Approved by:** Gil on 2026-10-06 in [pull request #2](https://github.com/Gil-netizen/aseh/pull/2)\
 **First release:** `v0.1.0-alpha.1`, public GitHub prerelease\
 **Primary package:** `io.github.gilnetizen.aseh`
 

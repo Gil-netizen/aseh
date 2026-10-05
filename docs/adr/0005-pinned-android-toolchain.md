@@ -1,8 +1,9 @@
 # ADR-0005: Pinned Android bootstrap toolchain
 
-- **Status:** Proposed for human approval
+- **Status:** Accepted
+- **Accepted:** Gil on 2026-10-06 in [pull request #2](https://github.com/Gil-netizen/aseh/pull/2)
 - **Date:** 2026-10-06
-- **Owner:** Gil (`@Gil-netizen`); reviewers: future Android build and release maintainers
+- **Owner:** Gil (`@Gil-netizen`); future re-review roles: Android build and release maintainers
 - **Decision scope:** Android project bootstrap, Gradle build hosts, CI images, compile and target SDK, minimum Android version
 - **Supersedes:** none
 - **Related:** [Release policy](../RELEASE.md), [Threat model](../THREAT_MODEL.md)
@@ -22,7 +23,7 @@ set. Dynamic, preview, or workstation-inherited versions are prohibited.
 
 ## Decision
 
-The proposed bootstrap host toolchain is:
+The accepted bootstrap host toolchain is:
 
 | Component | Pinned value |
 |---|---|

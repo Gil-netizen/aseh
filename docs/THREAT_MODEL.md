@@ -1,6 +1,7 @@
 # ASEH Threat Model
 
-**Status:** Proposed for human approval\
+**Status:** Approved\
+**Approved by:** Gil on 2026-10-06 in [pull request #2](https://github.com/Gil-netizen/aseh/pull/2)\
 **Method:** Asset and trust-boundary review with misuse cases\
 **Review when:** A provider, pack format, deep link, export, sync service, permission, cryptographic design, or release path changes
 

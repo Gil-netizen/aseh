@@ -1,6 +1,7 @@
 # ASEH specification authority map
 
-**Status:** Proposed for human approval\
+**Status:** Approved\
+**Approved by:** Gil on 2026-10-06 in [pull request #2](https://github.com/Gil-netizen/aseh/pull/2)\
 **Source:** `ASEH_full_product_and_build_spec.md`, Step 0 acceptance scope
 
 This map assigns one primary repository document to each requirement group in

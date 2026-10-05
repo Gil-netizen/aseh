@@ -1,8 +1,9 @@
 # ADR-0001: Sensitive storage and case-export cryptography
 
-- **Status:** Proposed for human approval
+- **Status:** Accepted
+- **Accepted:** Gil on 2026-10-06 in [pull request #2](https://github.com/Gil-netizen/aseh/pull/2)
 - **Date:** 2026-10-06
-- **Owner:** Gil (`@Gil-netizen`); reviewers: future Android security and privacy maintainers
+- **Owner:** Gil (`@Gil-netizen`); future re-review roles: Android security and privacy maintainers
 - **Decision scope:** `core:security`, sensitive persistence, `.asehcase` export and import, backup rules
 - **Supersedes:** none
 - **Related:** [Privacy model](../PRIVACY_MODEL.md), [Threat model](../THREAT_MODEL.md), [Release policy](../RELEASE.md)

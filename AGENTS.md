@@ -2,7 +2,7 @@
 
 Use an ExecPlan from `docs/plans/` for work spanning multiple modules or more than one pull request.
 
-Do not scaffold Android application code until the Phase 0 repository-contract pull request records Gil's human review of these instructions and the proposed canonical documents.
+Gil approved the Phase 0 repository contract in [pull request #2](https://github.com/Gil-netizen/aseh/pull/2) on 2026-10-06. Android scaffolding must start from `main` after that contract is merged, create a new ExecPlan, and implement its approved documents and accepted ADRs.
 
 Read only the canonical documents relevant to the task:
 

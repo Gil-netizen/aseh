@@ -1,8 +1,9 @@
 # ADR-0004: App, pack, and release signing
 
-- **Status:** Proposed for human approval
+- **Status:** Accepted
+- **Accepted:** Gil on 2026-10-06 in [pull request #2](https://github.com/Gil-netizen/aseh/pull/2)
 - **Date:** 2026-10-06
-- **Owner:** Gil (`@Gil-netizen`); reviewers: future release, Android security, and pack maintainers
+- **Owner:** Gil (`@Gil-netizen`); future re-review roles: release, Android security, and pack maintainers
 - **Decision scope:** `.asehpack` compiler/verifier, Android artifacts, GitHub releases, future Play enrollment, signing-key custody and recovery
 - **Supersedes:** none
 - **Related:** [Source policy](../SOURCE_POLICY.md), [Threat model](../THREAT_MODEL.md), [Release policy](../RELEASE.md)

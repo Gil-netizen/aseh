@@ -1,6 +1,7 @@
 # ASEH Privacy Model
 
-**Status:** Proposed for human approval\
+**Status:** Approved\
+**Approved by:** Gil on 2026-10-06 in [pull request #2](https://github.com/Gil-netizen/aseh/pull/2)\
 **Applies to:** The Android app, ASEH-authored content packs, exports, and optional connected AI\
 **Review when:** A new data type, provider, permission, account system, synchronization feature, or telemetry system is proposed
 

@@ -1,10 +1,11 @@
 # ExecPlan 0001: Phase 0 repository contract
 
-**Status:** Active pending human review\
+**Status:** Complete\
 **Owner:** Gil\
 **Started:** 2026-10-06\
+**Completed:** 2026-10-06\
 **Tracking:** [GitHub issue #1](https://github.com/Gil-netizen/aseh/issues/1)\
-**Scope:** Repository governance, canonical-document proposals, verified toolchain, source-rights inventory, and the review gate before Android scaffolding
+**Scope:** Repository governance, canonical-document approval, verified toolchain, source-rights inventory, and the review gate before Android scaffolding
 
 ## Outcome
 
@@ -25,14 +26,15 @@ Do not scaffold application code until that review is recorded.
 - First optional connected adapter: OpenAI Responses with direct on-device BYOK.
 - First release channel: GitHub prerelease `v0.1.0-alpha.1`.
 
-## Work completed for review
+## Work completed
 
 - Created the public repository and local Git remote.
-- Drafted the repository instructions, contribution and review rules, issue
+- Established the repository instructions, contribution and review rules, issue
   forms, CODEOWNERS, pull-request template, and policy workflow.
-- Drafted the product, method, editorial, source, licensing, privacy, threat,
-  accessibility, release, and open-question documents.
-- Recorded proposed technical decisions for human review before implementation.
+- Approved the product, method, editorial, source, privacy, threat,
+  accessibility, release, and traceability documents.
+- Retained the rights inventory as Draft and the decision register as Active.
+- Accepted ADR-0001 through ADR-0005 for implementation.
 - Installed and verified JDK 17, Android Studio, Android SDK Platform 37.0,
   Build Tools 37.0.0, and Platform-Tools 37.0.1 locally; the reviewed
   compatibility set and exact evidence are recorded in ADR-0005.
@@ -44,18 +46,20 @@ Do not scaffold application code until that review is recorded.
   exception to the no-direct-AI-push rule; all later work uses PRs.
 - Created the `content` and `needs-editorial-review` issue labels referenced by
   the repository forms.
+- Published [pull request #2](https://github.com/Gil-netizen/aseh/pull/2), passed
+  the repository-policy workflow, and made `Links and secret patterns` a
+  required check on protected `main`.
+- Recorded Gil's named approval in [the Phase 0 review](https://github.com/Gil-netizen/aseh/pull/2#issuecomment-6004033585).
+- Kept all open source-rights questions explicitly fail-closed and excluded
+  unapproved material from distributable packs.
 
-## Remaining Phase 0 work
+## Completion state
 
-1. Publish this document set on a review branch and open a pull request.
-2. Verify protected `main` after the bootstrap sequence and require the
-   repository-policy check once its first PR run establishes the check context.
-3. Obtain and record Gil's review of the repository instructions and proposed
-   canonical documents.
-4. Resolve or explicitly defer every open source-rights item before a public
-   content pack includes the affected text.
-5. After approval, change the reviewed documents from proposed/draft to their
-   approved status in the merge commit or a human-authored follow-up.
+The repository contract, canonical policies, and ADRs are approved. Rights
+questions in `OPEN_QUESTIONS.md` and the draft rights inventory remain active
+release gates; their open status does not authorize affected content for a
+public pack. The repository owner must merge pull request #2 before a separate
+scaffolding branch starts from `main`.
 
 ## Verification
 
@@ -69,12 +73,11 @@ Do not scaffold application code until that review is recorded.
 
 ## Gate to the next plan
 
-Android scaffolding begins only after a named human records approval of
-`AGENTS.md`, the contribution/governance contract, and the proposed canonical
-documents in the Phase 0 pull request. The scaffolding PR will create its own
-ExecPlan, implement and verify the reviewed pins in ADR-0005, and record the
-module layout. A demonstrated incompatibility requires a superseding ADR rather
-than an unreviewed version change.
+Gil recorded the required approval of `AGENTS.md`, the contribution/governance
+contract, the canonical documents, and ADR-0001 through ADR-0005 in pull request
+#2. After the repository owner merges that PR, the scaffolding PR creates its
+own ExecPlan, implements and verifies the accepted pins in ADR-0005, and records
+the module layout. A demonstrated incompatibility requires a superseding ADR.
 Because Gil is both repository owner and Phase 0 pull-request author, GitHub
-cannot count a self-review; Gil performs the final owner merge after recording
-the review. No AI agent uses the administrator bypass.
+cannot count a self-review; Gil performs the final owner merge. No AI agent uses
+the administrator bypass.
