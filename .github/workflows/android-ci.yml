@@ -248,6 +248,7 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: ${{ matrix.profile }}
+          disk-size: '8G'
           avd-name: aseh-${{ matrix.label }}
           emulator-boot-timeout: '900'
           emulator-options: >-

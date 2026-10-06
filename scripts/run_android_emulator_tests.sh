@@ -47,6 +47,14 @@ require_sdk_revision "build-tools;37.0.0" "37.0.0"
 require_sdk_revision "platforms;android-37.0" "2"
 require_sdk_revision "${system_image}" "${system_image_revision}"
 
+data_partition_report="build/reports/android-sdk/data-partition-${emulator_label}.txt"
+adb shell df -k /data | tr -d '\r' | tee "${data_partition_report}"
+data_available_kb="$(awk 'NR > 1 && $NF == "/data" { print $(NF - 2); exit }' "${data_partition_report}")"
+if [[ ! "${data_available_kb}" =~ ^[0-9]+$ ]] || (( data_available_kb < 2097152 )); then
+  echo "The emulator must provide at least 2 GiB free on /data; found ${data_available_kb:-unknown} KiB." >&2
+  exit 1
+fi
+
 font_scale="${ASEH_FONT_SCALE:-1.0}"
 adb shell settings put system font_scale "${font_scale}"
 adb shell am broadcast -a android.intent.action.CONFIGURATION_CHANGED >/dev/null 2>&1 || true
