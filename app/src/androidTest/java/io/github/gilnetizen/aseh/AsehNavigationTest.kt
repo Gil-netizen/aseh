@@ -8,6 +8,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
@@ -20,6 +21,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.core.os.LocaleListCompat
 import androidx.compose.ui.unit.dp
@@ -27,8 +29,10 @@ import androidx.test.ext.junit.rules.ActivityScenarioRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.platform.io.PlatformTestStorageRegistry
+import io.github.gilnetizen.aseh.core.database.ManualPlaceContext
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -36,7 +40,6 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import kotlinx.coroutines.withTimeout
 
 @RunWith(AndroidJUnit4::class)
 class AsehNavigationTest {
@@ -58,19 +61,31 @@ class AsehNavigationTest {
   }
 
   @Before
-  fun resetSelectedDestination() {
+  fun resetAppState() {
     runBlocking {
       withTimeout(5_000) {
         preferencesRepository().setSelectedDestinationId("now")
+        manualPlaceContextRepository().clear()
         preferencesRepository().preferences.first { it.selectedDestinationId == "now" }
+        manualPlaceContextRepository().context.first { it == null }
       }
     }
     waitUntilSelected("now")
+    waitUntilManualPlaceCleared()
   }
 
   @After
-  fun restoreSystemLocales() {
-    setApplicationLocales(LocaleListCompat.getEmptyLocaleList())
+  fun restoreAppState() {
+    try {
+      runBlocking {
+        withTimeout(5_000) {
+          manualPlaceContextRepository().clear()
+          manualPlaceContextRepository().context.first { it == null }
+        }
+      }
+    } finally {
+      setApplicationLocales(LocaleListCompat.getEmptyLocaleList())
+    }
   }
 
   @Test
@@ -143,6 +158,88 @@ class AsehNavigationTest {
     waitUntilSelected("build")
   }
 
+  @Test
+  fun savedManualPlaceSurvivesActivityRecreation() {
+    setApplicationLanguage("en")
+
+    composeRule.onNodeWithTag("now-change-context")
+      .performScrollTo()
+      .performClick()
+    enterManualPlaceText("now-place-label-input", syntheticManualPlace.label)
+    enterManualPlaceText("now-place-latitude-input", "12.25")
+    enterManualPlaceText("now-place-longitude-input", "-34.5")
+    enterManualPlaceText("now-place-elevation-input", "123.75")
+    composeRule.onNodeWithTag("now-select-time-zone")
+      .performScrollTo()
+      .performClick()
+    composeRule.onNodeWithTag("now-time-zone-search")
+      .performTextInput("UTC")
+    composeRule.onNodeWithTag("now-time-zone-option-UTC")
+      .performScrollTo()
+      .performClick()
+    composeRule.onNodeWithTag("now-save-context")
+      .performScrollTo()
+      .performClick()
+
+    waitUntilManualPlaceDisplayed()
+    runBlocking {
+      withTimeout(5_000) {
+        manualPlaceContextRepository().context.first { it == syntheticManualPlace }
+      }
+    }
+
+    composeRule.activityRule.scenario.recreate()
+
+    waitUntilSelected("now")
+    waitUntilManualPlaceDisplayed()
+    assertSyntheticManualPlaceIsDisplayed()
+  }
+
+  @Test
+  fun unsavedManualPlaceDraftIsDiscardedOnActivityRecreation() {
+    setApplicationLanguage("en")
+
+    composeRule.onNodeWithTag("now-change-context")
+      .performScrollTo()
+      .performClick()
+    enterManualPlaceText("now-place-label-input", "Unsaved synthetic place")
+    enterManualPlaceText("now-place-latitude-input", "1.25")
+    enterManualPlaceText("now-place-longitude-input", "-2.5")
+
+    composeRule.activityRule.scenario.recreate()
+
+    waitUntilSelected("now")
+    waitUntilManualPlaceCleared()
+    composeRule.onAllNodesWithTag("now-place-editor").assertCountEquals(0)
+  }
+
+  @Test
+  fun hebrewManualPlaceEditorKeepsEveryActionReachable() {
+    setApplicationLanguage("he")
+
+    composeRule.onNodeWithTag("now-change-context")
+      .performScrollTo()
+      .performClick()
+    composeRule.onNodeWithTag("now-place-label-input")
+      .performScrollTo()
+      .assertIsDisplayed()
+      .assertTextContains("EN · Place name", substring = true)
+    composeRule.onNodeWithTag("now-save-context")
+      .performScrollTo()
+      .assertIsDisplayed()
+      .assertHasClickAction()
+      .assertWidthIsAtLeast(48.dp)
+      .assertHeightIsAtLeast(48.dp)
+    composeRule.onNodeWithTag("now-cancel-context")
+      .performScrollTo()
+      .assertIsDisplayed()
+      .assertHasClickAction()
+      .assertTextContains("EN · Cancel", substring = true)
+      .assertWidthIsAtLeast(48.dp)
+      .assertHeightIsAtLeast(48.dp)
+      .performClick()
+  }
+
   private fun setApplicationLanguage(languageTag: String) {
     setApplicationLocales(LocaleListCompat.forLanguageTags(languageTag))
   }
@@ -169,9 +266,14 @@ class AsehNavigationTest {
   }
 
   private fun preferencesRepository() =
+    appGraph().interfacePreferencesRepository
+
+  private fun manualPlaceContextRepository() =
+    appGraph().manualPlaceContextRepository
+
+  private fun appGraph() =
     (InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as AsehApplication)
       .appGraph
-      .interfacePreferencesRepository
 
   private fun waitUntilSelected(destinationId: String) {
     composeRule.waitUntil(timeoutMillis = 5_000) {
@@ -179,6 +281,51 @@ class AsehNavigationTest {
         composeRule.onNodeWithTag("destination-$destinationId").assertIsSelected()
       }.isSuccess
     }
+  }
+
+  private fun enterManualPlaceText(testTag: String, value: String) {
+    composeRule.onNodeWithTag(testTag)
+      .performScrollTo()
+      .performTextInput(value)
+  }
+
+  private fun waitUntilManualPlaceCleared() {
+    composeRule.waitUntil(timeoutMillis = 5_000) {
+      runCatching {
+        composeRule.onNodeWithTag("now-location-status")
+          .assertTextContains("No location is set", substring = true)
+        composeRule.onAllNodesWithTag("now-place-name").fetchSemanticsNodes().isEmpty()
+      }.getOrDefault(false)
+    }
+  }
+
+  private fun waitUntilManualPlaceDisplayed() {
+    composeRule.waitUntil(timeoutMillis = 5_000) {
+      runCatching {
+        composeRule.onNodeWithTag("now-place-name")
+          .assertTextContains(syntheticManualPlace.label, substring = true)
+      }.isSuccess
+    }
+  }
+
+  private fun assertSyntheticManualPlaceIsDisplayed() {
+    composeRule.onNodeWithTag("now-location-status")
+      .assertTextContains("manual place context is active", substring = true)
+    composeRule.onNodeWithTag("now-place-name")
+      .assertTextContains(syntheticManualPlace.label, substring = true)
+    composeRule.onNodeWithTag("now-place-coordinates")
+      .assertTextContains("12.25, -34.5", substring = true)
+    composeRule.onNodeWithTag("now-place-elevation")
+      .assertTextContains("123.75 meters", substring = true)
+    composeRule.onNodeWithTag("now-time-zone")
+      .assertTextContains(syntheticManualPlace.timeZoneId, substring = true)
+    composeRule.onNodeWithTag("now-change-context")
+      .performScrollTo()
+      .assertIsDisplayed()
+      .assertHasClickAction()
+      .assertTextContains("Change context", substring = true)
+      .assertWidthIsAtLeast(48.dp)
+      .assertHeightIsAtLeast(48.dp)
   }
 
   private fun assertLogicalDestinationOrder(isRtl: Boolean) {
@@ -250,9 +397,10 @@ class AsehNavigationTest {
       "now-time",
       "now-time-zone",
       "now-location-status",
+      "now-change-context",
       "now-refresh",
     )
-    orderedTags.dropLast(1).forEach { tag ->
+    orderedTags.takeWhile { it != "now-change-context" }.forEach { tag ->
       composeRule.onNodeWithTag(tag).assertIsDisplayed()
     }
 
@@ -299,6 +447,14 @@ class AsehNavigationTest {
     composeRule.onNodeWithTag("now-location-status")
       .assertTextContains("${fallbackPrefix}Location", substring = true)
 
+    composeRule.onNodeWithTag("now-change-context")
+      .performScrollTo()
+      .assertIsDisplayed()
+      .assertHasClickAction()
+      .assertTextContains("${fallbackPrefix}Change context", substring = true)
+      .assertWidthIsAtLeast(48.dp)
+      .assertHeightIsAtLeast(48.dp)
+
     composeRule.onNodeWithTag("now-refresh")
       .performScrollTo()
       .assertIsDisplayed()
@@ -310,5 +466,13 @@ class AsehNavigationTest {
 
   private companion object {
     val destinationIds = listOf("now", "practice", "prayer", "study", "build")
+
+    val syntheticManualPlace = ManualPlaceContext(
+      label = "Synthetic Test Place",
+      latitudeDegrees = 12.25,
+      longitudeDegrees = -34.5,
+      elevationMeters = 123.75,
+      timeZoneId = "UTC",
+    )
   }
 }

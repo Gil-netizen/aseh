@@ -3,6 +3,8 @@ package io.github.gilnetizen.aseh
 import android.content.Context
 import io.github.gilnetizen.aseh.core.database.InterfacePreferencesRepository
 import io.github.gilnetizen.aseh.core.database.InterfacePreferencesRepositoryFactory
+import io.github.gilnetizen.aseh.core.database.ManualPlaceContextRepository
+import io.github.gilnetizen.aseh.core.database.ManualPlaceContextRepositoryFactory
 import io.github.gilnetizen.aseh.core.database.OperationalStore
 import io.github.gilnetizen.aseh.core.database.OperationalStoreFactory
 import java.io.Closeable
@@ -29,6 +31,12 @@ class AppGraph(context: Context) : Closeable {
 
   val interfacePreferencesRepository: InterfacePreferencesRepository =
     InterfacePreferencesRepositoryFactory.create(
+      context = context.applicationContext,
+      scope = applicationScope,
+    )
+
+  val manualPlaceContextRepository: ManualPlaceContextRepository =
+    ManualPlaceContextRepositoryFactory.create(
       context = context.applicationContext,
       scope = applicationScope,
     )
