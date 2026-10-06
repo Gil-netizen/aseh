@@ -17,6 +17,17 @@ system_image_revision="${ASEH_SYSTEM_IMAGE_REVISION:?ASEH_SYSTEM_IMAGE_REVISION 
 sdk_inventory="build/reports/android-sdk/installed-post-runner-${emulator_label}.txt"
 mkdir -p "$(dirname "${sdk_inventory}")"
 
+if ! command -v timeout >/dev/null 2>&1; then
+  echo "GNU timeout is required to bound emulator health probes." >&2
+  exit 1
+fi
+
+adb_with_timeout() {
+  local duration="$1"
+  shift
+  timeout -k 2s "${duration}" adb "$@"
+}
+
 android_services_ready() {
   local activity_output
   local android_sdk
@@ -27,14 +38,14 @@ android_services_ready() {
   local user_state_output
   local window_service_output
 
-  android_sdk="$(adb shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r' || true)"
-  boot_completed="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
-  user_ce_available="$(adb shell getprop sys.user.0.ce_available 2>/dev/null | tr -d '\r' || true)"
-  user_state_output="$(adb shell am get-started-user-state 0 2>/dev/null | tr -d '\r' || true)"
-  package_output="$(adb shell cmd package list packages 2>/dev/null | tr -d '\r' || true)"
-  activity_output="$(adb shell service check activity 2>/dev/null | tr -d '\r' || true)"
-  package_service_output="$(adb shell service check package 2>/dev/null | tr -d '\r' || true)"
-  window_service_output="$(adb shell service check window 2>/dev/null | tr -d '\r' || true)"
+  android_sdk="$(adb_with_timeout 5s shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r')" || return 1
+  boot_completed="$(adb_with_timeout 5s shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" || return 1
+  user_ce_available="$(adb_with_timeout 5s shell getprop sys.user.0.ce_available 2>/dev/null | tr -d '\r')" || return 1
+  user_state_output="$(adb_with_timeout 5s shell am get-started-user-state 0 2>/dev/null | tr -d '\r')" || return 1
+  package_output="$(adb_with_timeout 5s shell cmd package list packages 2>/dev/null | tr -d '\r')" || return 1
+  activity_output="$(adb_with_timeout 5s shell service check activity 2>/dev/null | tr -d '\r')" || return 1
+  package_service_output="$(adb_with_timeout 5s shell service check package 2>/dev/null | tr -d '\r')" || return 1
+  window_service_output="$(adb_with_timeout 5s shell service check window 2>/dev/null | tr -d '\r')" || return 1
 
   [[ "${android_sdk}" =~ ^[0-9]+$ ]] || return 1
   # The pinned API 26 image does not expose the CE property; the user-state
@@ -53,7 +64,8 @@ android_services_ready() {
 
 wait_for_android_services() {
   local consecutive=0
-  for _ in $(seq 1 30); do
+  local deadline=$((SECONDS + 120))
+  while (( SECONDS < deadline )); do
     if android_services_ready; then
       ((consecutive += 1))
       if (( consecutive >= 3 )); then
@@ -64,36 +76,179 @@ wait_for_android_services() {
     fi
     sleep 2
   done
-  echo "Android's boot, user credential storage, activity, package, and window services were not stable within 60 seconds." >&2
+  echo "Android's boot, user credential storage, activity, package, and window services were not stable within 120 seconds." >&2
   return 1
 }
 
-assert_graphics_compatibility() {
-  local required_extension="${ASEH_REQUIRED_GRAPHICS_EXTENSION:-none}"
-  local surfaceflinger_dump="${diagnostic_dir}/surfaceflinger.txt"
+assert_pinned_api_37_image() {
+  local purpose="$1"
+  local android_build_id
+  local android_build_type
+  local android_debuggable
+  local android_incremental
+  local android_sdk
 
-  case "${required_extension}" in
-    none)
+  android_build_id="$(adb_with_timeout 5s shell getprop ro.build.id 2>/dev/null | tr -d '\r' || true)"
+  android_build_type="$(adb_with_timeout 5s shell getprop ro.build.type 2>/dev/null | tr -d '\r' || true)"
+  android_debuggable="$(adb_with_timeout 5s shell getprop ro.debuggable 2>/dev/null | tr -d '\r' || true)"
+  android_incremental="$(adb_with_timeout 5s shell getprop ro.build.version.incremental 2>/dev/null | tr -d '\r' || true)"
+  android_sdk="$(adb_with_timeout 5s shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r' || true)"
+  if [[ "${android_sdk}" != "37" \
+    || "${android_build_id}" != "CE2A.260420.019" \
+    || "${android_incremental}" != "15611780" \
+    || "${android_build_type}" != "userdebug" \
+    || "${android_debuggable}" != "1" \
+    || "${system_image}" != "system-images;android-37.0;google_apis;x86_64" \
+    || "${system_image_revision}" != "6" ]]; then
+    echo "${purpose} is validated only for pinned debuggable API 37 image revision 6 (CE2A.260420.019/15611780)." >&2
+    return 1
+  fi
+}
+
+assert_luma_sampling_mode() {
+  local luma_sampling_mode="${ASEH_LUMA_SAMPLING_MODE:-default}"
+  case "${luma_sampling_mode}" in
+    default)
       return 0
       ;;
-    ANDROID_EMU_read_color_buffer_dma)
+    disabled)
       ;;
     *)
-      echo "Unsupported required graphics extension: ${required_extension}." >&2
+      echo "Unsupported luma sampling mode: ${luma_sampling_mode}." >&2
       return 1
       ;;
   esac
 
-  if ! adb shell dumpsys SurfaceFlinger >"${surfaceflinger_dump}" 2>&1; then
-    echo "Unable to inspect SurfaceFlinger graphics capabilities." >&2
+  assert_pinned_api_37_image "Luma sampling suppression"
+
+  local configured_value
+  local surfaceflinger_pid
+  local surfaceflinger_service
+  configured_value="$(adb_with_timeout 5s shell getprop debug.sf.luma_sampling 2>/dev/null | tr -d '\r' || true)"
+  surfaceflinger_pid="$(adb_with_timeout 5s shell pidof surfaceflinger 2>/dev/null | tr -d '\r' || true)"
+  surfaceflinger_service="$(adb_with_timeout 5s shell service check SurfaceFlinger 2>/dev/null | tr -d '\r' || true)"
+  printf 'debug.sf.luma_sampling=%s\nsurfaceflinger_pid=%s\n%s\n' \
+    "${configured_value}" "${surfaceflinger_pid}" "${surfaceflinger_service}" \
+    >"${diagnostic_dir}/luma-sampling-state.txt"
+  if [[ "${configured_value}" != "0" ]]; then
+    echo "SurfaceFlinger luma sampling is not disabled; found ${configured_value:-no property value}." >&2
     return 1
   fi
-  if ! grep -Eq \
-    "(^|[[:space:]])${required_extension}([[:space:]]|$)" \
-    "${surfaceflinger_dump}"; then
-    echo "Required SurfaceFlinger extension ${required_extension} is unavailable." >&2
+  if [[ ! "${surfaceflinger_pid}" =~ ^[0-9]+$ ]]; then
+    echo "SurfaceFlinger is not running with a single numeric process id." >&2
     return 1
   fi
+  if ! grep -Eq '^Service SurfaceFlinger: found[[:space:]]*$' <<<"${surfaceflinger_service}"; then
+    echo "The SurfaceFlinger service is unavailable after luma sampling configuration." >&2
+    return 1
+  fi
+}
+
+configure_luma_sampling_mode() {
+  local luma_sampling_mode="${ASEH_LUMA_SAMPLING_MODE:-default}"
+  case "${luma_sampling_mode}" in
+    default)
+      return 0
+      ;;
+    disabled)
+      ;;
+    *)
+      echo "Unsupported luma sampling mode: ${luma_sampling_mode}." >&2
+      return 1
+      ;;
+  esac
+
+  assert_pinned_api_37_image "Luma sampling suppression"
+
+  local boot_id_before
+  local boot_id_after
+  local local_prop_bytes
+  local local_prop_content
+  local local_prop_metadata
+  local root_uid
+  boot_id_before="$(adb_with_timeout 5s shell cat /proc/sys/kernel/random/boot_id 2>/dev/null | tr -d '\r' || true)"
+  if [[ -z "${boot_id_before}" ]]; then
+    echo "Unable to record the Android boot id before luma sampling configuration." >&2
+    return 1
+  fi
+
+  if ! adb_with_timeout 15s root >"${diagnostic_dir}/adb-root.txt" 2>&1; then
+    echo "Unable to restart adbd as root on the pinned userdebug image." >&2
+    return 1
+  fi
+  root_uid=""
+  for _ in $(seq 1 30); do
+    root_uid="$(adb_with_timeout 5s shell id -u 2>/dev/null | tr -d '\r' || true)"
+    if [[ "${root_uid}" == "0" ]]; then
+      break
+    fi
+    sleep 1
+  done
+  if [[ "${root_uid}" != "0" ]]; then
+    echo "adbd did not restart with root privileges on the pinned userdebug image." >&2
+    return 1
+  fi
+
+  # CI creates a fresh AVD. A repeated local run may retain our own exact
+  # override, but never replace an unrelated developer property file.
+  if adb shell test -e /data/local.prop; then
+    local existing_local_prop_bytes
+    local existing_local_prop_content
+    existing_local_prop_content="$(adb shell cat /data/local.prop 2>/dev/null | tr -d '\r' || true)"
+    existing_local_prop_bytes="$(adb shell 'wc -c < /data/local.prop' 2>/dev/null | tr -d '\r' | awk '{ print $1 }' || true)"
+    if [[ "${existing_local_prop_content}" != "debug.sf.luma_sampling=0" \
+      || "${existing_local_prop_bytes}" != "25" ]]; then
+      echo "Refusing to replace an unexpected existing /data/local.prop." >&2
+      return 1
+    fi
+  fi
+
+  if ! printf 'debug.sf.luma_sampling=0\n' \
+    | adb shell 'cat > /data/local.prop.aseh'; then
+    echo "Unable to stage the Android 17 luma sampling property." >&2
+    return 1
+  fi
+  adb shell chown 0:0 /data/local.prop.aseh
+  adb shell chmod 0600 /data/local.prop.aseh
+  adb shell mv -f /data/local.prop.aseh /data/local.prop
+  adb shell chown 0:0 /data/local.prop
+  adb shell chmod 0600 /data/local.prop
+  adb shell restorecon /data/local.prop
+  adb shell sync
+
+  local_prop_content="$(adb shell cat /data/local.prop 2>/dev/null | tr -d '\r' || true)"
+  local_prop_bytes="$(adb shell 'wc -c < /data/local.prop' 2>/dev/null | tr -d '\r' | awk '{ print $1 }' || true)"
+  # Keep the remote stat format free of spaces. Native adb rebuilds argv into
+  # a remote shell command and otherwise splits the format string at its space.
+  local_prop_metadata="$(adb shell stat -c '%u:%g:%a' /data/local.prop 2>/dev/null | tr -d '\r' || true)"
+  printf 'content=%s\nbytes=%s\nmetadata=%s\n' \
+    "${local_prop_content}" "${local_prop_bytes}" "${local_prop_metadata}" \
+    >"${diagnostic_dir}/local-prop-state.txt"
+  if [[ "${local_prop_content}" != "debug.sf.luma_sampling=0" \
+    || "${local_prop_bytes}" != "25" \
+    || "${local_prop_metadata}" != "0:0:600" ]]; then
+    echo "The staged /data/local.prop content or metadata is invalid." >&2
+    return 1
+  fi
+
+  adb_with_timeout 15s reboot
+  boot_id_after=""
+  local reboot_deadline=$((SECONDS + 120))
+  while (( SECONDS < reboot_deadline )); do
+    boot_id_after="$(adb_with_timeout 5s shell cat /proc/sys/kernel/random/boot_id 2>/dev/null | tr -d '\r' || true)"
+    if [[ -n "${boot_id_after}" && "${boot_id_after}" != "${boot_id_before}" ]]; then
+      break
+    fi
+    sleep 2
+  done
+  if [[ -z "${boot_id_after}" || "${boot_id_after}" == "${boot_id_before}" ]]; then
+    echo "The Android guest did not complete a distinct reboot within 120 seconds for luma sampling configuration." >&2
+    return 1
+  fi
+  wait_for_android_services
+  printf 'before=%s\nafter=%s\n' "${boot_id_before}" "${boot_id_after}" \
+    >"${diagnostic_dir}/luma-sampling-reboot.txt"
+  assert_luma_sampling_mode
 }
 
 configure_navigation_mode() {
@@ -121,7 +276,7 @@ configure_navigation_mode() {
 }
 
 task_snapshot_controller_state() {
-  adb shell dumpsys window 2>/dev/null \
+  adb_with_timeout 15s shell dumpsys window 2>/dev/null \
     | tr -d '\r' \
     | awk '
       /mSnapshotEnabled=/ { controller_state = $0; next }
@@ -162,20 +317,7 @@ configure_task_snapshot_mode() {
       ;;
   esac
 
-  local android_build_id
-  local android_incremental
-  local android_sdk
-  android_build_id="$(adb shell getprop ro.build.id 2>/dev/null | tr -d '\r' || true)"
-  android_incremental="$(adb shell getprop ro.build.version.incremental 2>/dev/null | tr -d '\r' || true)"
-  android_sdk="$(adb shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r' || true)"
-  if [[ "${android_sdk}" != "37" \
-    || "${android_build_id}" != "CE2A.260420.019" \
-    || "${android_incremental}" != "15611780" \
-    || "${system_image}" != "system-images;android-37.0;google_apis;x86_64" \
-    || "${system_image_revision}" != "6" ]]; then
-    echo "Task snapshot suppression is validated only for pinned API 37 image revision 6 (CE2A.260420.019/15611780)." >&2
-    return 1
-  fi
+  assert_pinned_api_37_image "Task snapshot suppression"
 
   # Android 17 exposes no named wm shell command for this control. On the
   # exact image above, IWindowManager transaction 137 is
@@ -200,24 +342,25 @@ capture_android_diagnostics() {
   local output_dir="${diagnostic_dir}/${reason}"
   mkdir -p "${output_dir}"
 
-  adb get-state >"${output_dir}/adb-state.txt" 2>&1 || true
-  adb shell getprop >"${output_dir}/properties.txt" 2>&1 || true
-  adb shell service list >"${output_dir}/services.txt" 2>&1 || true
-  adb shell service check activity >"${output_dir}/activity-service.txt" 2>&1 || true
-  adb shell service check package >"${output_dir}/package-service.txt" 2>&1 || true
-  adb shell am get-started-user-state 0 >"${output_dir}/user-0-state.txt" 2>&1 || true
-  adb shell cmd overlay list >"${output_dir}/navigation-overlays.txt" 2>&1 || true
-  adb shell cat /proc/meminfo >"${output_dir}/meminfo.txt" 2>&1 || true
-  adb shell df -k >"${output_dir}/filesystems.txt" 2>&1 || true
-  adb shell ps -A >"${output_dir}/processes.txt" 2>&1 || true
-  adb shell dumpsys activity activities >"${output_dir}/activities.txt" 2>&1 || true
-  adb shell dumpsys SurfaceFlinger >"${output_dir}/surfaceflinger.txt" 2>&1 || true
+  adb_with_timeout 3s get-state >"${output_dir}/adb-state.txt" 2>&1 || true
+  adb_with_timeout 3s shell getprop >"${output_dir}/properties.txt" 2>&1 || true
+  adb_with_timeout 3s shell service list >"${output_dir}/services.txt" 2>&1 || true
+  adb_with_timeout 3s shell service check activity >"${output_dir}/activity-service.txt" 2>&1 || true
+  adb_with_timeout 3s shell service check package >"${output_dir}/package-service.txt" 2>&1 || true
+  adb_with_timeout 3s shell am get-started-user-state 0 >"${output_dir}/user-0-state.txt" 2>&1 || true
+  adb_with_timeout 3s shell cmd overlay list >"${output_dir}/navigation-overlays.txt" 2>&1 || true
+  adb_with_timeout 3s shell cat /proc/meminfo >"${output_dir}/meminfo.txt" 2>&1 || true
+  adb_with_timeout 3s shell df -k >"${output_dir}/filesystems.txt" 2>&1 || true
+  adb_with_timeout 3s shell ps -A >"${output_dir}/processes.txt" 2>&1 || true
+  adb_with_timeout 3s shell dumpsys activity activities >"${output_dir}/activities.txt" 2>&1 || true
+  adb_with_timeout 3s shell dumpsys SurfaceFlinger >"${output_dir}/surfaceflinger.txt" 2>&1 || true
+  adb_with_timeout 3s shell getprop debug.sf.luma_sampling >"${output_dir}/luma-sampling-property.txt" 2>&1 || true
   task_snapshot_controller_state >"${output_dir}/task-snapshot-controller.txt" 2>&1 || true
-  adb shell ls -la /data/tombstones >"${output_dir}/tombstones.txt" 2>&1 || true
-  adb logcat -b all -d -v threadtime >"${output_dir}/logcat.txt" 2>&1 || true
-  printf 'emulator_label=%s\nexit_code=%s\ngpu_mode=%s\nrequired_graphics_extension=%s\nnavigation_mode=%s\ntask_snapshot_mode=%s\n' \
+  adb_with_timeout 3s shell ls -la /data/tombstones >"${output_dir}/tombstones.txt" 2>&1 || true
+  adb_with_timeout 3s logcat -b all -d -v threadtime >"${output_dir}/logcat.txt" 2>&1 || true
+  printf 'emulator_label=%s\nexit_code=%s\ngpu_mode=%s\nluma_sampling_mode=%s\nnavigation_mode=%s\ntask_snapshot_mode=%s\n' \
     "${emulator_label}" "${exit_code}" "${ASEH_GPU_MODE:-unknown}" \
-    "${ASEH_REQUIRED_GRAPHICS_EXTENSION:-none}" "${ASEH_NAVIGATION_MODE:-default}" \
+    "${ASEH_LUMA_SAMPLING_MODE:-default}" "${ASEH_NAVIGATION_MODE:-default}" \
     "${ASEH_TASK_SNAPSHOT_MODE:-default}" \
     >"${output_dir}/runner-metadata.txt"
 }
@@ -234,8 +377,9 @@ capture_on_failure() {
 trap capture_on_failure EXIT
 
 wait_for_android_services
-assert_graphics_compatibility
+configure_luma_sampling_mode
 configure_navigation_mode
+assert_luma_sampling_mode
 
 sdkmanager_path="$(command -v sdkmanager 2>/dev/null || true)"
 if [[ -z "${sdkmanager_path}" ]]; then
@@ -281,6 +425,7 @@ run_connected_suite() {
   local task="$1"
 
   wait_for_android_services
+  assert_luma_sampling_mode
   assert_task_snapshot_mode
   ./gradlew \
     --no-daemon \
@@ -289,6 +434,7 @@ run_connected_suite() {
     --dependency-verification strict \
     "${task}"
   wait_for_android_services
+  assert_luma_sampling_mode
   assert_task_snapshot_mode
 }
 
@@ -395,8 +541,12 @@ adb install -r "${apk_path}" >/dev/null
 adb shell svc wifi disable >/dev/null 2>&1 || true
 adb shell svc data disable >/dev/null 2>&1 || true
 adb shell am force-stop "${application_id}"
+assert_luma_sampling_mode
+assert_task_snapshot_mode
 adb shell monkey -p "${application_id}" -c android.intent.category.LAUNCHER 1 \
   >"${artifact_dir}/launcher-command.txt"
+assert_luma_sampling_mode
+assert_task_snapshot_mode
 
 process_started=false
 for _ in $(seq 1 20); do
@@ -427,9 +577,9 @@ else
   echo "UI Automator hierarchy capture was unavailable; the PNG evidence was retained." >&2
 fi
 
-printf 'application_id=%s\napk=%s\nfont_scale=%s\ngpu_mode=%s\nrequired_graphics_extension=%s\nnavigation_mode=%s\ntask_snapshot_mode=%s\n' \
+printf 'application_id=%s\napk=%s\nfont_scale=%s\ngpu_mode=%s\nluma_sampling_mode=%s\nnavigation_mode=%s\ntask_snapshot_mode=%s\n' \
   "${application_id}" "${apk_path}" "${font_scale}" "${ASEH_GPU_MODE:-unknown}" \
-  "${ASEH_REQUIRED_GRAPHICS_EXTENSION:-none}" "${ASEH_NAVIGATION_MODE:-default}" \
+  "${ASEH_LUMA_SAMPLING_MODE:-default}" "${ASEH_NAVIGATION_MODE:-default}" \
   "${ASEH_TASK_SNAPSHOT_MODE:-default}" \
   >"${artifact_dir}/launch-metadata.txt"
 echo "Instrumentation and offline launcher smoke test passed on ${emulator_label}."
