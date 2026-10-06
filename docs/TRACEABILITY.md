@@ -23,3 +23,12 @@ primary authority named here controls until a reviewed decision updates both.
 Decisions intentionally left open are recorded in
 [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md). That register cannot weaken a
 non-waivable privacy, security, source-integrity, or high-consequence gate.
+
+## Active implementation trace
+
+This table links bounded implementation slices to their controlling approved
+requirements. It does not replace the authority assignments above.
+
+| Slice | Product and policy requirements | Architecture and implementation record | Verification boundary |
+|---|---|---|---|
+| [Issue #5: offline Now civil context](https://github.com/Gil-netizen/aseh/issues/5) | `PRODUCT.md`: Now date/context capability, inspectable context, and offline core; `PRIVACY_MODEL.md`: local time/place processing and separate review for new permissions; `ACCESSIBILITY.md`: RTL/LTR, semantics, 200% text, and explicit no-location behavior | [Accepted ADR-0006](adr/0006-manual-app-composition.md) supplies the application-owned time source; [ExecPlan 0003](plans/0003-offline-now-context.md) bounds the slice to civil date, time, weekday, IANA zone, no-location status, and manual refresh | Fixed-clock unit and Compose tests; no `INTERNET` or location permission; API 26/API 37 offline launch; English LTR, Hebrew-locale RTL, TalkBack order, 48 dp refresh, and 200% text evidence |

@@ -13,6 +13,8 @@ class MainActivity : AppCompatActivity() {
     val graph = (application as AsehApplication).appGraph
     setContent {
       AsehApp(
+        clock = graph.clock,
+        deviceTimeZone = graph.deviceTimeZone,
         interfacePreferencesRepository = graph.interfacePreferencesRepository,
         onSelectedDestinationChanged = graph::setSelectedDestinationId,
       )

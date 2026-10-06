@@ -22,9 +22,13 @@ import io.github.gilnetizen.aseh.feature.now.NowScreen
 import io.github.gilnetizen.aseh.feature.practice.PracticeScreen
 import io.github.gilnetizen.aseh.feature.prayer.PrayerScreen
 import io.github.gilnetizen.aseh.feature.study.StudyScreen
+import java.time.Clock
+import java.time.ZoneId
 
 @Composable
 fun AsehApp(
+  clock: Clock,
+  deviceTimeZone: () -> ZoneId,
   interfacePreferencesRepository: InterfacePreferencesRepository,
   onSelectedDestinationChanged: (String) -> Unit,
 ) {
@@ -57,7 +61,10 @@ fun AsehApp(
         modifier = Modifier.testTag("aseh-root"),
       ) { destination ->
         when (destination) {
-          AsehDestination.NOW -> NowScreen()
+          AsehDestination.NOW -> NowScreen(
+            clock = clock,
+            timeZone = deviceTimeZone,
+          )
           AsehDestination.PRACTICE -> PracticeScreen()
           AsehDestination.PRAYER -> PrayerScreen()
           AsehDestination.STUDY -> StudyScreen()

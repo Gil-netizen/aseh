@@ -562,6 +562,36 @@ if [[ "${process_started}" != "true" ]]; then
   exit 1
 fi
 
+focused_window_file="${artifact_dir}/focused-window.txt"
+: >"${focused_window_file}"
+app_focused=false
+for _ in $(seq 1 30); do
+  focused_window="$(
+    # Android 17 ignores the legacy "windows" subcommand even though the full
+    # dump still includes mCurrentFocus and mFocusedApp. The unqualified dump
+    # exposes those focus records on both supported API levels.
+    adb_with_timeout 5s shell dumpsys window 2>/dev/null \
+      | tr -d '\r' \
+      | grep -E 'mCurrentFocus|mFocusedApp' \
+      || true
+  )"
+  printf '%s\n' "${focused_window}" >"${focused_window_file}"
+  if grep -Fq "${application_id}" <<<"${focused_window}"; then
+    app_focused=true
+    break
+  fi
+  sleep 1
+done
+
+if [[ "${app_focused}" != "true" ]]; then
+  echo "${application_id} did not become the focused launcher activity." >&2
+  exit 1
+fi
+
+# Focus can precede the first fully composed frame. One bounded second avoids
+# recording the launcher transition as the app's visual launch evidence.
+sleep 1
+
 adb exec-out screencap -p >"${artifact_dir}/launch.png"
 if [[ ! -s "${artifact_dir}/launch.png" ]]; then
   echo "The emulator returned an empty launch screenshot." >&2

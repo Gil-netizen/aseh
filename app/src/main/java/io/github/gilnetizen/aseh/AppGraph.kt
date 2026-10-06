@@ -6,6 +6,8 @@ import io.github.gilnetizen.aseh.core.database.InterfacePreferencesRepositoryFac
 import io.github.gilnetizen.aseh.core.database.OperationalStore
 import io.github.gilnetizen.aseh.core.database.OperationalStoreFactory
 import java.io.Closeable
+import java.time.Clock
+import java.time.ZoneId
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -13,13 +15,17 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 
-/** Application-scoped manual composition root selected in proposed ADR-0006. */
+/** Application-scoped manual composition root selected in accepted ADR-0006. */
 class AppGraph(context: Context) : Closeable {
   private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
   private val selectedDestinationUpdates = Channel<String>(capacity = Channel.CONFLATED)
 
   val operationalStore: OperationalStore =
     OperationalStoreFactory.create(context.applicationContext)
+
+  val clock: Clock = Clock.systemUTC()
+
+  val deviceTimeZone: () -> ZoneId = ZoneId::systemDefault
 
   val interfacePreferencesRepository: InterfacePreferencesRepository =
     InterfacePreferencesRepositoryFactory.create(
