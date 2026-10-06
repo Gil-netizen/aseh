@@ -55,6 +55,19 @@ if [[ ! "${data_available_kb}" =~ ^[0-9]+$ ]] || (( data_available_kb < 2097152 
   exit 1
 fi
 
+wait_for_package_service() {
+  local package_output
+  for _ in $(seq 1 30); do
+    package_output="$(adb shell cmd package list packages 2>/dev/null | tr -d '\r' || true)"
+    if grep -q '^package:' <<<"${package_output}"; then
+      return 0
+    fi
+    sleep 2
+  done
+  echo "Android's package service did not become ready within 60 seconds." >&2
+  return 1
+}
+
 font_scale="${ASEH_FONT_SCALE:-1.0}"
 adb shell settings put system font_scale "${font_scale}"
 adb shell am broadcast -a android.intent.action.CONFIGURATION_CHANGED >/dev/null 2>&1 || true
@@ -85,6 +98,7 @@ fi
 
 # The launch smoke test deliberately leaves the debug app installed. Remove
 # that exact package so a repeated local run starts from the same state as CI.
+wait_for_package_service
 adb uninstall io.github.gilnetizen.aseh.dev.debug >/dev/null 2>&1 || true
 
 ./gradlew \
@@ -114,6 +128,7 @@ assert_connected_test_success() {
 
 assert_connected_test_success "app"
 
+wait_for_package_service
 ./gradlew \
   --no-daemon \
   --no-parallel \

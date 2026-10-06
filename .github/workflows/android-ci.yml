@@ -232,6 +232,19 @@ jobs:
           grep -Eq '^[[:space:]]*build-tools;37\.0\.0[[:space:]]+\|[[:space:]]+37\.0\.0([[:space:]]|$)' "build/reports/android-sdk/installed-${{ matrix.label }}.txt"
           grep -Fq "${SYSTEM_IMAGE_PACKAGE}" "build/reports/android-sdk/installed-${{ matrix.label }}.txt"
 
+      - name: Preassemble instrumentation APKs
+        shell: bash
+        run: |
+          chmod +x gradlew
+          ./gradlew \
+            --no-daemon \
+            --no-parallel \
+            --stacktrace \
+            --dependency-verification strict \
+            :app:assembleDevDebug \
+            :app:assembleDevDebugAndroidTest \
+            :core:database:assembleDebugAndroidTest
+
       - name: Enable KVM access
         shell: bash
         run: |
