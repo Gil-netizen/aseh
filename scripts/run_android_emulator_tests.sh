@@ -65,11 +65,15 @@ fi
 mkdir -p \
   "app/build/outputs/connected_android_test_additional_output/devDebugAndroidTest/connected/${avd_name}(AVD) - ${android_release}"
 
-# TestStorage owns the output root on newer Android images, so deleting that
-# directory itself fails even when it is empty. Remove only ASEH's known files.
-adb shell rm -f \
+# TestStorage owns this FUSE-backed output root on newer Android images and can
+# reject direct shell cleanup. Host outputs were cleared above, and the checks
+# below still require this run to produce fresh, non-empty ASEH screenshots.
+if ! adb shell rm -f \
   /sdcard/googletest/test_outputfiles/english-ltr.png \
-  /sdcard/googletest/test_outputfiles/hebrew-rtl.png
+  /sdcard/googletest/test_outputfiles/hebrew-rtl.png \
+  >/dev/null 2>&1; then
+  echo "TestStorage denied optional device-side screenshot cleanup; continuing with fail-closed host checks." >&2
+fi
 
 # The launch smoke test deliberately leaves the debug app installed. Remove
 # that exact package so a repeated local run starts from the same state as CI.
