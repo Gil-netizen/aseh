@@ -1,7 +1,8 @@
 # ASEH specification authority map
 
-**Status:** Approved\
-**Approved by:** Gil on 2026-10-06 in [pull request #2](https://github.com/Gil-netizen/aseh/pull/2)\
+**Status:** Approved baseline; device-location traceability update under review\
+**Baseline approved by:** Gil on 2026-10-06 in [pull request #2](https://github.com/Gil-netizen/aseh/pull/2)\
+**Current update:** Issue #9 and device-location evidence are under review in [pull request #10](https://github.com/Gil-netizen/aseh/pull/10)\
 **Source:** `ASEH_full_product_and_build_spec.md`, Step 0 acceptance scope
 
 This map assigns one primary repository document to each requirement group in

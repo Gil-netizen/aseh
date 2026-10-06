@@ -1,7 +1,8 @@
 # ASEH Threat Model
 
-**Status:** Approved\
-**Approved by:** Gil on 2026-10-06 in [pull request #2](https://github.com/Gil-netizen/aseh/pull/2)\
+**Status:** Approved baseline; device-location amendment under review\
+**Baseline approved by:** Gil on 2026-10-06 in [pull request #2](https://github.com/Gil-netizen/aseh/pull/2)\
+**Current amendment:** Foreground device-location additions are under review in [pull request #10](https://github.com/Gil-netizen/aseh/pull/10)\
 **Method:** Asset and trust-boundary review with misuse cases\
 **Review when:** A provider, pack format, deep link, export, sync service, permission, cryptographic design, or release path changes
 
