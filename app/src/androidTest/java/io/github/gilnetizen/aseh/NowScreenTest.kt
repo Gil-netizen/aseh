@@ -153,13 +153,43 @@ class NowScreenTest {
         substring = true,
         ignoreCase = true,
       )
-    composeRule.onAllNodesWithTag("now-change-context").assertCountEquals(0)
+    composeRule.onAllNodesWithTag("now-set-up-place").assertCountEquals(0)
 
     composeRule.runOnIdle { ready.value = true }
 
-    composeRule.onNodeWithTag("now-change-context")
-      .performScrollTo()
+    composeRule.onNodeWithTag("now-set-up-place")
       .assertIsDisplayed()
+      .assertTextContains("Set up place")
+  }
+
+  @Test
+  fun externalRequestOpensEditorAndIsConsumed() {
+    val openEditorRequest = androidx.compose.runtime.mutableIntStateOf(0)
+    var consumedRequests = 0
+
+    composeRule.setContent {
+      AsehTheme {
+        NowScreen(
+          clock = fixedClock(),
+          openEditorRequest = openEditorRequest.intValue,
+          onOpenEditorRequestConsumed = {
+            consumedRequests += 1
+            openEditorRequest.intValue = 0
+          },
+        )
+      }
+    }
+
+    composeRule.onAllNodesWithTag("now-place-editor").assertCountEquals(0)
+
+    composeRule.runOnIdle { openEditorRequest.intValue += 1 }
+
+    composeRule.onNodeWithTag("now-place-editor").assertIsDisplayed()
+    composeRule.runOnIdle { assertEquals(1, consumedRequests) }
+    composeRule.onNodeWithTag("now-cancel-context")
+      .performScrollTo()
+      .performClick()
+    composeRule.onAllNodesWithTag("now-place-editor").assertCountEquals(0)
   }
 
   @Test
@@ -296,7 +326,7 @@ class NowScreenTest {
 
     composeRule.runOnIdle { assertNull(savedContext) }
     composeRule.onAllNodesWithTag("now-place-editor").assertCountEquals(0)
-    composeRule.onNodeWithTag("now-change-context")
+    composeRule.onNodeWithTag("now-set-up-place")
       .performScrollTo()
       .assertIsDisplayed()
   }
@@ -322,7 +352,7 @@ class NowScreenTest {
       }
     }
 
-    openManualPlaceEditor()
+    openManualPlaceEditor("now-change-context")
     composeRule.onNodeWithTag("now-clear-context")
       .performScrollTo()
       .performClick()
@@ -356,9 +386,13 @@ class NowScreenTest {
       .assertTextContains("America/Los_Angeles")
   }
 
-  private fun openManualPlaceEditor() {
-    composeRule.onNodeWithTag("now-change-context")
-      .performScrollTo()
+  private fun openManualPlaceEditor(actionTag: String = "now-set-up-place") {
+    val action = composeRule.onNodeWithTag(actionTag)
+    if (actionTag == "now-change-context") {
+      action.performScrollTo()
+    }
+    action
+      .assertIsDisplayed()
       .performClick()
     composeRule.onNodeWithTag("now-place-editor").assertIsDisplayed()
   }

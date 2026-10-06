@@ -1,10 +1,15 @@
 package io.github.gilnetizen.aseh
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -38,9 +43,9 @@ fun AsehApp(
   manualPlaceContextRepository: ManualPlaceContextRepository,
   onSelectedDestinationChanged: (String) -> Unit,
 ) {
-  val storedPreferences by interfacePreferencesRepository.preferences.collectAsState(
-    initial = InterfacePreferences(),
-  )
+  val loadedPreferences: InterfacePreferences? by
+    interfacePreferencesRepository.preferences.collectAsState(initial = null)
+  val storedPreferences = loadedPreferences ?: InterfacePreferences()
   var storedManualPlaceContext by remember(manualPlaceContextRepository) {
     mutableStateOf<ManualPlaceContext?>(null)
   }
@@ -54,15 +59,17 @@ fun AsehApp(
       manualPlaceContextReady = true
     }
   }
-  var selectedDestinationId by rememberSaveable {
-    mutableStateOf(storedPreferences.selectedDestinationId)
+  // A local choice takes precedence after the persisted value hydrates. The
+  // repository writer is asynchronous, so reflecting every later emission
+  // here could replay an older destination over a newer tap.
+  var selectedDestinationOverride by rememberSaveable {
+    mutableStateOf<String?>(null)
   }
+  var openPlaceEditorRequest by rememberSaveable { mutableIntStateOf(0) }
 
-  LaunchedEffect(storedPreferences.selectedDestinationId) {
-    selectedDestinationId = storedPreferences.selectedDestinationId
-  }
-
-  val selectedDestination = AsehDestination.fromPersistedId(selectedDestinationId)
+  val selectedDestination = AsehDestination.fromPersistedId(
+    selectedDestinationOverride ?: storedPreferences.selectedDestinationId,
+  )
   val currentDensity = LocalDensity.current
   val scaledDensity = Density(
     density = currentDensity.density,
@@ -74,26 +81,49 @@ fun AsehApp(
       AsehAdaptiveNavigationShell(
         selectedDestination = selectedDestination,
         onDestinationSelected = { destination ->
-          selectedDestinationId = destination.persistedId
+          selectedDestinationOverride = destination.persistedId
+          if (destination != AsehDestination.NOW) {
+            openPlaceEditorRequest = 0
+          }
           onSelectedDestinationChanged(destination.persistedId)
         },
         modifier = Modifier.testTag("aseh-root"),
       ) { destination ->
-        when (destination) {
-          AsehDestination.NOW -> NowScreen(
-            clock = clock,
-            timeZone = deviceTimeZone,
-            placeContextReady = manualPlaceContextReady,
-            placeContext = storedManualPlaceContext?.toNowPlaceContext(),
-            onSavePlaceContext = { context ->
-              manualPlaceContextRepository.save(context.toStoredManualPlaceContext())
-            },
-            onClearPlaceContext = manualPlaceContextRepository::clear,
-          )
-          AsehDestination.PRACTICE -> PracticeScreen()
-          AsehDestination.PRAYER -> PrayerScreen()
-          AsehDestination.STUDY -> StudyScreen()
-          AsehDestination.BUILD -> BuildScreen()
+        Column(modifier = Modifier.fillMaxSize()) {
+          if (manualPlaceContextReady && destination != AsehDestination.NOW) {
+            PlaceContextBar(
+              placeContext = storedManualPlaceContext,
+              onEdit = {
+                selectedDestinationOverride = AsehDestination.NOW.persistedId
+                onSelectedDestinationChanged(AsehDestination.NOW.persistedId)
+                openPlaceEditorRequest += 1
+              },
+            )
+          }
+          Box(
+            modifier = Modifier
+              .fillMaxWidth()
+              .weight(1f),
+          ) {
+            when (destination) {
+              AsehDestination.NOW -> NowScreen(
+                clock = clock,
+                timeZone = deviceTimeZone,
+                placeContextReady = manualPlaceContextReady,
+                placeContext = storedManualPlaceContext?.toNowPlaceContext(),
+                openEditorRequest = openPlaceEditorRequest,
+                onOpenEditorRequestConsumed = { openPlaceEditorRequest = 0 },
+                onSavePlaceContext = { context ->
+                  manualPlaceContextRepository.save(context.toStoredManualPlaceContext())
+                },
+                onClearPlaceContext = manualPlaceContextRepository::clear,
+              )
+              AsehDestination.PRACTICE -> PracticeScreen()
+              AsehDestination.PRAYER -> PrayerScreen()
+              AsehDestination.STUDY -> StudyScreen()
+              AsehDestination.BUILD -> BuildScreen()
+            }
+          }
         }
       }
     }

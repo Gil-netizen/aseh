@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- The approved alpha has no reviewed Hebrew interface translation yet. -->
+  <string name="app_place_context_missing_title">&#x2066;EN · No place set&#x2069;</string>
+  <string name="app_place_context_missing_summary">&#x2066;EN · Add one manual place offline so ASEH can use its time zone for civil date and time.&#x2069;</string>
+  <string name="app_place_context_active_title">&#x2066;EN · Active place&#x2069;</string>
+  <string name="app_place_context_setup">&#x2066;EN · Set up place&#x2069;</string>
+  <string name="app_place_context_change">&#x2066;EN · Change place&#x2069;</string>
+</resources>

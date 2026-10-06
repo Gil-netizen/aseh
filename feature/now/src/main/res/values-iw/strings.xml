@@ -17,6 +17,7 @@
     <string name="feature_now_elevation_label">&#x2066;EN · Elevation&#x2069;</string>
     <string name="feature_now_elevation_meters">&#x2066;EN · %1$s meters&#x2069;</string>
     <string name="feature_now_not_set">&#x2066;EN · Not set&#x2069;</string>
+    <string name="feature_now_set_up_place">&#x2066;EN · Set up place&#x2069;</string>
     <string name="feature_now_change_context">&#x2066;EN · Change context&#x2069;</string>
     <string name="feature_now_editor_title">&#x2066;EN · Manual place context&#x2069;</string>
     <string name="feature_now_editor_explanation">&#x2066;EN · Enter one place explicitly. ASEH stores it only after Save and does not infer a calendar profile from the coordinates.&#x2069;</string>

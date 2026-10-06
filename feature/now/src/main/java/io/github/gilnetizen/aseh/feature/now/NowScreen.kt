@@ -122,6 +122,8 @@ fun NowScreen(
     timeZone: () -> ZoneId = { clock.zone },
     placeContextReady: Boolean = true,
     placeContext: NowPlaceContext? = null,
+    openEditorRequest: Int = 0,
+    onOpenEditorRequestConsumed: () -> Unit = {},
     onSavePlaceContext: suspend (NowPlaceContext) -> Unit = {},
     onClearPlaceContext: suspend () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -136,6 +138,13 @@ fun NowScreen(
         NowScreenState(clock, selectedTimeZone)
     }
     var editingPlace by remember { mutableStateOf(false) }
+
+    LaunchedEffect(openEditorRequest, placeContextReady) {
+        if (openEditorRequest > 0 && placeContextReady) {
+            editingPlace = true
+            onOpenEditorRequestConsumed()
+        }
+    }
 
     Column(
         modifier = modifier
@@ -172,6 +181,32 @@ fun NowScreen(
             modifier = Modifier.testTag("now-summary"),
         )
 
+        if (editingPlace) {
+            ManualPlaceEditor(
+                existingContext = placeContext,
+                defaultTimeZoneId = state.snapshot.timeZone,
+                onSave = { savedContext ->
+                    onSavePlaceContext(savedContext)
+                    editingPlace = false
+                },
+                onCancel = { editingPlace = false },
+                onClear = if (placeContext == null) {
+                    null
+                } else {
+                    {
+                        onClearPlaceContext()
+                        editingPlace = false
+                    }
+                },
+            )
+        } else if (placeContext == null) {
+            PlaceContextCard(
+                placeContextReady = placeContextReady,
+                placeContext = null,
+                onChange = { editingPlace = true },
+            )
+        }
+
         NowValue(
             label = stringResource(R.string.feature_now_civil_date_label),
             value = state.snapshot.civilDate,
@@ -193,25 +228,7 @@ fun NowScreen(
             testTag = "now-time-zone",
         )
 
-        if (editingPlace) {
-            ManualPlaceEditor(
-                existingContext = placeContext,
-                defaultTimeZoneId = state.snapshot.timeZone,
-                onSave = { savedContext ->
-                    onSavePlaceContext(savedContext)
-                    editingPlace = false
-                },
-                onCancel = { editingPlace = false },
-                onClear = if (placeContext == null) {
-                    null
-                } else {
-                    {
-                        onClearPlaceContext()
-                        editingPlace = false
-                    }
-                },
-            )
-        } else {
+        if (!editingPlace && placeContext != null) {
             PlaceContextCard(
                 placeContextReady = placeContextReady,
                 placeContext = placeContext,
@@ -297,14 +314,26 @@ private fun PlaceContextCard(
             }
 
             if (placeContextReady) {
-                OutlinedButton(
-                    onClick = onChange,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 48.dp)
-                        .testTag("now-change-context"),
-                ) {
-                    Text(text = stringResource(R.string.feature_now_change_context))
+                if (placeContext == null) {
+                    Button(
+                        onClick = onChange,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .testTag("now-set-up-place"),
+                    ) {
+                        Text(text = stringResource(R.string.feature_now_set_up_place))
+                    }
+                } else {
+                    OutlinedButton(
+                        onClick = onChange,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .testTag("now-change-context"),
+                    ) {
+                        Text(text = stringResource(R.string.feature_now_change_context))
+                    }
                 }
             }
         }

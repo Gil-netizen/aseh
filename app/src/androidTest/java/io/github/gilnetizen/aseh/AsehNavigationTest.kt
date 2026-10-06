@@ -159,11 +159,34 @@ class AsehNavigationTest {
   }
 
   @Test
+  fun missingPlaceIsActionableFromAnotherDestination() {
+    setApplicationLanguage("en")
+
+    composeRule.onNodeWithTag("destination-study").performClick()
+    waitUntilSelected("study")
+
+    composeRule.onNodeWithTag("app-place-context-bar").assertIsDisplayed()
+    composeRule.onNodeWithTag("app-place-context-status")
+      .assertIsDisplayed()
+      .assertTextContains("No place set", substring = true)
+    composeRule.onNodeWithTag("app-place-context-action")
+      .assertIsDisplayed()
+      .assertHasClickAction()
+      .assertTextContains("Set up place", substring = true)
+      .assertWidthIsAtLeast(48.dp)
+      .assertHeightIsAtLeast(48.dp)
+      .performClick()
+
+    waitUntilSelected("now")
+    composeRule.onNodeWithTag("now-place-editor").assertIsDisplayed()
+  }
+
+  @Test
   fun savedManualPlaceSurvivesActivityRecreation() {
     setApplicationLanguage("en")
 
-    composeRule.onNodeWithTag("now-change-context")
-      .performScrollTo()
+    composeRule.onNodeWithTag("now-set-up-place")
+      .assertIsDisplayed()
       .performClick()
     enterManualPlaceText("now-place-label-input", syntheticManualPlace.label)
     enterManualPlaceText("now-place-latitude-input", "12.25")
@@ -199,8 +222,8 @@ class AsehNavigationTest {
   fun unsavedManualPlaceDraftIsDiscardedOnActivityRecreation() {
     setApplicationLanguage("en")
 
-    composeRule.onNodeWithTag("now-change-context")
-      .performScrollTo()
+    composeRule.onNodeWithTag("now-set-up-place")
+      .assertIsDisplayed()
       .performClick()
     enterManualPlaceText("now-place-label-input", "Unsaved synthetic place")
     enterManualPlaceText("now-place-latitude-input", "1.25")
@@ -217,8 +240,8 @@ class AsehNavigationTest {
   fun hebrewManualPlaceEditorKeepsEveryActionReachable() {
     setApplicationLanguage("he")
 
-    composeRule.onNodeWithTag("now-change-context")
-      .performScrollTo()
+    composeRule.onNodeWithTag("now-set-up-place")
+      .assertIsDisplayed()
       .performClick()
     composeRule.onNodeWithTag("now-place-label-input")
       .performScrollTo()
@@ -392,15 +415,20 @@ class AsehNavigationTest {
     val orderedTags = listOf(
       "now-heading",
       "now-summary",
+      "now-location-status",
+      "now-set-up-place",
       "now-date",
       "now-weekday",
       "now-time",
       "now-time-zone",
-      "now-location-status",
-      "now-change-context",
       "now-refresh",
     )
-    orderedTags.takeWhile { it != "now-change-context" }.forEach { tag ->
+    listOf(
+      "now-heading",
+      "now-summary",
+      "now-location-status",
+      "now-set-up-place",
+    ).forEach { tag ->
       composeRule.onNodeWithTag(tag).assertIsDisplayed()
     }
 
@@ -436,24 +464,27 @@ class AsehNavigationTest {
     }
 
     val fallbackPrefix = if (isHebrewFallback) "EN · " else ""
-    composeRule.onNodeWithTag("now-date")
-      .assertTextContains("${fallbackPrefix}Civil date", substring = true)
-    composeRule.onNodeWithTag("now-weekday")
-      .assertTextContains("${fallbackPrefix}Weekday", substring = true)
-    composeRule.onNodeWithTag("now-time")
-      .assertTextContains("${fallbackPrefix}Local time", substring = true)
-    composeRule.onNodeWithTag("now-time-zone")
-      .assertTextContains("${fallbackPrefix}Time zone", substring = true)
     composeRule.onNodeWithTag("now-location-status")
       .assertTextContains("${fallbackPrefix}Location", substring = true)
-
-    composeRule.onNodeWithTag("now-change-context")
-      .performScrollTo()
+    composeRule.onNodeWithTag("now-set-up-place")
       .assertIsDisplayed()
       .assertHasClickAction()
-      .assertTextContains("${fallbackPrefix}Change context", substring = true)
+      .assertTextContains("${fallbackPrefix}Set up place", substring = true)
       .assertWidthIsAtLeast(48.dp)
       .assertHeightIsAtLeast(48.dp)
+
+    composeRule.onNodeWithTag("now-date")
+      .performScrollTo()
+      .assertTextContains("${fallbackPrefix}Civil date", substring = true)
+    composeRule.onNodeWithTag("now-weekday")
+      .performScrollTo()
+      .assertTextContains("${fallbackPrefix}Weekday", substring = true)
+    composeRule.onNodeWithTag("now-time")
+      .performScrollTo()
+      .assertTextContains("${fallbackPrefix}Local time", substring = true)
+    composeRule.onNodeWithTag("now-time-zone")
+      .performScrollTo()
+      .assertTextContains("${fallbackPrefix}Time zone", substring = true)
 
     composeRule.onNodeWithTag("now-refresh")
       .performScrollTo()
@@ -462,6 +493,10 @@ class AsehNavigationTest {
       .assertTextContains("${fallbackPrefix}Refresh date and time", substring = true)
       .assertWidthIsAtLeast(48.dp)
       .assertHeightIsAtLeast(48.dp)
+
+    composeRule.onNodeWithTag("now-set-up-place")
+      .performScrollTo()
+      .assertIsDisplayed()
   }
 
   private companion object {

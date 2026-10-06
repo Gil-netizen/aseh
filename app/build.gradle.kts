@@ -17,8 +17,8 @@ android {
     applicationId = "io.github.gilnetizen.aseh"
     minSdk = 26
     targetSdk = 37
-    versionCode = 3
-    versionName = "0.1.0-alpha.3"
+    versionCode = 4
+    versionName = "0.1.0-alpha.4"
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     testInstrumentationRunnerArguments["useTestStorageService"] = "true"
   }

@@ -1,7 +1,9 @@
 package io.github.gilnetizen.aseh.core.database
 
+import androidx.datastore.core.DataStore
 import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
@@ -9,7 +11,11 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -50,7 +56,7 @@ class DataStoreManualPlaceContextRepositoryTest {
 
     @Test
     fun inclusiveCoordinateBoundariesAreAccepted() = runTest {
-        val repository = repository(backgroundScope, "boundaries.preferences_pb")
+        val repository = DataStoreManualPlaceContextRepository(InMemoryPreferencesDataStore())
         val northEast = validContext.copy(
             label = "x".repeat(MAX_MANUAL_PLACE_LABEL_LENGTH),
             latitudeDegrees = 90.0,
@@ -99,7 +105,7 @@ class DataStoreManualPlaceContextRepositoryTest {
 
     @Test
     fun clearRestoresNoContext() = runTest {
-        val repository = repository(backgroundScope, "clear.preferences_pb")
+        val repository = DataStoreManualPlaceContextRepository(InMemoryPreferencesDataStore())
         repository.save(validContext)
 
         repository.clear()
@@ -197,5 +203,26 @@ class DataStoreManualPlaceContextRepositoryTest {
             elevationMeters = 30.0,
             timeZoneId = "Etc/UTC",
         )
+    }
+}
+
+/**
+ * Keeps repository behavior tests independent of the host file-system implementation.
+ *
+ * Persistence and restart behavior remain covered by the Android instrumented test. This avoids
+ * the upstream DataStore JVM atomic-replace failure on Windows after a second write to one file.
+ */
+private class InMemoryPreferencesDataStore(
+    initialValue: Preferences = emptyPreferences(),
+) : DataStore<Preferences> {
+    private val state = MutableStateFlow(initialValue)
+    private val updateMutex = Mutex()
+
+    override val data: Flow<Preferences> = state
+
+    override suspend fun updateData(
+        transform: suspend (t: Preferences) -> Preferences,
+    ): Preferences = updateMutex.withLock {
+        transform(state.value).also { state.value = it }
     }
 }

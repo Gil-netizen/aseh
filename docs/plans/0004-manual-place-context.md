@@ -152,6 +152,11 @@ Expected: all gates pass; API 26 and API 37 suites pass offline.
   `0.1.0-alpha.3` / code 3.
 - [x] 2026-10-06 11:30 +03:00 — Completed instrumentation, accessibility,
   device, policy, and release-review evidence.
+- [x] 2026-10-06 15:00 +03:00 — Corrected the alpha.3 review finding that
+  place setup was below the initial phone viewport. The empty-state action now
+  appears directly below the Now summary, and every other destination exposes
+  the active or missing place with a direct route into the editor. The forward
+  review build is `0.1.0-alpha.4` / code 4.
 
 ## Decisions
 
@@ -167,6 +172,7 @@ Expected: all gates pass; API 26 and API 37 suites pass offline.
 | Date | Finding | Evidence | Effect on plan |
 |---|---|---|---|
 | 2026-10-06 | Preferences values can be incomplete or carry unexpected primitive types after corruption or manual manipulation | Repository tests construct malformed and wrong-type records | Decode through `asMap()` and return no context unless the entire record validates |
+| 2026-10-06 | The alpha.3 setup action was reachable but not discoverable on a phone because the unchanged civil values filled the first viewport | Mobile review plus the API 26 screenshot showed the Location card clipped above its action; the test called `performScrollTo()` before checking the action | Put the empty place card before the civil values, require its primary action to be displayed without scrolling, and expose place setup from the other destinations |
 
 ## Verification and acceptance
 
@@ -180,7 +186,7 @@ fresh-process restart over the same DataStore file.
 
 ## Rollout and recovery
 
-This is an alpha.3 review build with no remote rollout or feature flag. Clearing
+This is an alpha.4 review build with no remote rollout or feature flag. Clearing
 the context is the user recovery path. A code rollback leaves the isolated
 preferences file unused; a forward fix may decode or clear it without touching
 operational, sensitive, or content stores. No debug-signed review APK may be
@@ -195,9 +201,21 @@ The screen states that no religious or calendar inference is performed.
 
 ## Outcomes
 
-API 26 and API 37 each passed 17 application tests and 7 database tests. The
-API 37 run used 200 percent font scaling, with its task-snapshot and luma
+The final alpha.4 build passed 21 application tests and 7 database tests on
+both API 26 and API 37. The API 37 run used 200 percent font scaling, with its
+task-snapshot and luma
 safeguards active throughout. English LTR and labeled-English-fallback RTL
 screenshots were visually inspected, and static review found no blocker. A
 human TalkBack and hardware-keyboard walkthrough remains part of release review;
 the automated and screenshot evidence does not claim to replace it.
+
+The first alpha.3 mobile review found a material discoverability defect despite
+those passing checks: the setup control was below the fold and the shell
+restored a placeholder destination after upgrade. Alpha.4 adds an above-fold
+empty-state action and a global place-context route, and treats unassisted
+visibility as an explicit test condition.
+
+The exact alpha.4 APK was also installed directly over the published alpha.3
+APK on API 26. The saved Study destination reopened after upgrade with the
+missing-place panel visible above the placeholder and its action opened the
+manual place editor.
