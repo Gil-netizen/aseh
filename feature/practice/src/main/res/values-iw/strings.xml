@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feature_practice_title">&#x2066;EN · Practice&#x2069;</string>
+    <string name="feature_practice_placeholder">&#x2066;EN · Placeholder only.&#x2069;</string>
+    <string name="feature_practice_mixed_script_fixture">אבג · &#x2068;ABC&#x2069; · 123</string>
+</resources>

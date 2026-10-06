@@ -81,6 +81,11 @@ The following records were accepted by Gil on 2026-10-06 in [pull request #2](ht
 - [ADR-0004: App, pack, and release signing](0004-app-pack-and-release-signing.md)
 - [ADR-0005: Pinned Android bootstrap toolchain](0005-pinned-android-toolchain.md)
 
+The following record is proposed in the Android walking-skeleton pull request
+and is not binding until a named human accepts it:
+
+- [ADR-0006: Manual application composition and constructor injection](0006-manual-app-composition.md)
+
 The Android module layout remains for the scaffolding ExecPlan. Scaffolding may
 depend on the accepted compatibility set in ADR-0005; a demonstrated
 incompatibility requires a superseding ADR.

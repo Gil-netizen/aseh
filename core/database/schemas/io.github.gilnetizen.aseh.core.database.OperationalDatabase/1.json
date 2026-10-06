@@ -1,0 +1,74 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "053db7eb3a7d64af854627a45848b347",
+    "entities": [
+      {
+        "tableName": "installed_pack_catalog",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`pack_id` TEXT NOT NULL, `immutable_version` TEXT NOT NULL, `manifest_sha256` TEXT NOT NULL, `schema_version` INTEGER NOT NULL, `signing_key_id` TEXT NOT NULL, `is_active` INTEGER NOT NULL, PRIMARY KEY(`pack_id`, `immutable_version`))",
+        "fields": [
+          {
+            "fieldPath": "packId",
+            "columnName": "pack_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "immutableVersion",
+            "columnName": "immutable_version",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "manifestSha256",
+            "columnName": "manifest_sha256",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "schemaVersion",
+            "columnName": "schema_version",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "signingKeyId",
+            "columnName": "signing_key_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isActive",
+            "columnName": "is_active",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "pack_id",
+            "immutable_version"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_installed_pack_catalog_pack_id_is_active",
+            "unique": false,
+            "columnNames": [
+              "pack_id",
+              "is_active"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_installed_pack_catalog_pack_id_is_active` ON `${TABLE_NAME}` (`pack_id`, `is_active`)"
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '053db7eb3a7d64af854627a45848b347')"
+    ]
+  }
+}

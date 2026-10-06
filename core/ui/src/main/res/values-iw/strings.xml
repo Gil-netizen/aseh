@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android maps the modern Hebrew language tag `he` to this legacy
+         resource qualifier. The spec supplies no reviewed Hebrew navigation
+         translation, so keep canonical labels and mark the gap. -->
+    <string name="aseh_destination_now">&#x2066;EN · Now&#x2069;</string>
+    <string name="aseh_destination_practice">&#x2066;EN · Practice&#x2069;</string>
+    <string name="aseh_destination_prayer">&#x2066;EN · Pray&#x2069;</string>
+    <string name="aseh_destination_study">&#x2066;EN · Study&#x2069;</string>
+    <string name="aseh_destination_build">&#x2066;EN · Build&#x2069;</string>
+
+    <string name="aseh_destination_symbol_now">N</string>
+    <string name="aseh_destination_symbol_practice">Pc</string>
+    <string name="aseh_destination_symbol_prayer">Pr</string>
+    <string name="aseh_destination_symbol_study">S</string>
+    <string name="aseh_destination_symbol_build">B</string>
+</resources>

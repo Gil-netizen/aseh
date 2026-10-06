@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feature_build_title">&#x2066;EN · Build&#x2069;</string>
+    <string name="feature_build_placeholder">&#x2066;EN · Placeholder only.&#x2069;</string>
+    <string name="feature_build_mixed_script_fixture">אבג · &#x2068;ABC&#x2069; · 123</string>
+</resources>
