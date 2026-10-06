@@ -5,11 +5,13 @@ import android.graphics.Bitmap
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.v2.AndroidComposeTestRule
@@ -17,6 +19,8 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.core.os.LocaleListCompat
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.rules.ActivityScenarioRule
@@ -92,6 +96,8 @@ class AsehNavigationTest {
       composeRule.onNodeWithTag("destination-$destinationId").assertIsSelected()
     }
 
+    assertNowContextIsUsable(isHebrewFallback = false)
+
     captureRoot("english-ltr.png")
   }
 
@@ -101,7 +107,10 @@ class AsehNavigationTest {
 
     assertLogicalDestinationOrder(isRtl = true)
     composeRule.onNodeWithContentDescription("EN · Build", substring = true).performClick()
+    composeRule.onNodeWithContentDescription("EN · Now", substring = true).performClick()
     composeRule.waitForIdle()
+
+    assertNowContextIsUsable(isHebrewFallback = true)
 
     captureRoot("hebrew-rtl.png")
   }
@@ -230,6 +239,73 @@ class AsehNavigationTest {
         .fetchSemanticsNode()
       assertEquals(Role.Tab, destination.config[SemanticsProperties.Role])
     }
+  }
+
+  private fun assertNowContextIsUsable(isHebrewFallback: Boolean) {
+    val orderedTags = listOf(
+      "now-heading",
+      "now-summary",
+      "now-date",
+      "now-weekday",
+      "now-time",
+      "now-time-zone",
+      "now-location-status",
+      "now-refresh",
+    )
+    orderedTags.dropLast(1).forEach { tag ->
+      composeRule.onNodeWithTag(tag).assertIsDisplayed()
+    }
+
+    val headings = composeRule.onAllNodes(
+      matcher = SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading),
+      useUnmergedTree = true,
+    ).fetchSemanticsNodes()
+    assertEquals("Now must expose exactly one semantic heading", 1, headings.size)
+
+    val targetNodeIds = orderedTags.associateWith { tag ->
+      composeRule.onNodeWithTag(tag).fetchSemanticsNode().id
+    }
+    val semanticsTreeOrder = mutableListOf<Int>()
+    fun visit(node: SemanticsNode) {
+      semanticsTreeOrder += node.id
+      node.children.forEach(::visit)
+    }
+    visit(
+      composeRule.onNodeWithTag(
+        testTag = "aseh-root",
+        useUnmergedTree = true,
+      ).fetchSemanticsNode(),
+    )
+    val targetTreeIndices = orderedTags.map { tag ->
+      semanticsTreeOrder.indexOf(targetNodeIds.getValue(tag))
+    }
+    assertTrue(
+      "Every Now node must be present in the unmerged semantics tree",
+      targetTreeIndices.all { it >= 0 },
+    )
+    targetTreeIndices.zipWithNext().forEach { (current, next) ->
+      assertTrue("Now content must follow logical semantics-tree order", current < next)
+    }
+
+    val fallbackPrefix = if (isHebrewFallback) "EN · " else ""
+    composeRule.onNodeWithTag("now-date")
+      .assertTextContains("${fallbackPrefix}Civil date", substring = true)
+    composeRule.onNodeWithTag("now-weekday")
+      .assertTextContains("${fallbackPrefix}Weekday", substring = true)
+    composeRule.onNodeWithTag("now-time")
+      .assertTextContains("${fallbackPrefix}Local time", substring = true)
+    composeRule.onNodeWithTag("now-time-zone")
+      .assertTextContains("${fallbackPrefix}Time zone", substring = true)
+    composeRule.onNodeWithTag("now-location-status")
+      .assertTextContains("${fallbackPrefix}Location", substring = true)
+
+    composeRule.onNodeWithTag("now-refresh")
+      .performScrollTo()
+      .assertIsDisplayed()
+      .assertHasClickAction()
+      .assertTextContains("${fallbackPrefix}Refresh date and time", substring = true)
+      .assertWidthIsAtLeast(48.dp)
+      .assertHeightIsAtLeast(48.dp)
   }
 
   private companion object {

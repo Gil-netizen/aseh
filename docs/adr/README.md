@@ -81,8 +81,8 @@ The following records were accepted by Gil on 2026-10-06 in [pull request #2](ht
 - [ADR-0004: App, pack, and release signing](0004-app-pack-and-release-signing.md)
 - [ADR-0005: Pinned Android bootstrap toolchain](0005-pinned-android-toolchain.md)
 
-The following record is proposed in the Android walking-skeleton pull request
-and is not binding until a named human accepts it:
+The following record was accepted by Gil on 2026-10-06 in the implementation
+conversation for [pull request #4](https://github.com/Gil-netizen/aseh/pull/4):
 
 - [ADR-0006: Manual application composition and constructor injection](0006-manual-app-composition.md)
 

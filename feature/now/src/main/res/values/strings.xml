@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="feature_now_title">Now</string>
-    <string name="feature_now_placeholder">Placeholder only. Reviewed content is not included in this build.</string>
-    <string name="feature_now_mixed_script_fixture">ABC · &#x2068;אבג&#x2069; · 123</string>
+    <string name="feature_now_summary">Current civil date and time from this device. Available offline.</string>
+    <string name="feature_now_civil_date_label">Civil date</string>
+    <string name="feature_now_weekday_label">Weekday</string>
+    <string name="feature_now_local_time_label">Local time</string>
+    <string name="feature_now_time_zone_label">Time zone</string>
+    <string name="feature_now_location_label">Location</string>
+    <string name="feature_now_location_unavailable">No location is set. Civil date and time remain available using the device time zone. Hebrew day boundaries and zmanim require a location and a reviewed calculation method.</string>
+    <string name="feature_now_refresh">Refresh date and time</string>
 </resources>

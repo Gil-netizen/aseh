@@ -1,11 +1,12 @@
 # ADR-0006: Manual application composition and constructor injection
 
-- **Status:** Proposed
+- **Status:** Accepted
+- **Accepted:** Gil on 2026-10-06 in the implementation conversation for [pull request #4](https://github.com/Gil-netizen/aseh/pull/4)
 - **Date:** 2026-10-06
 - **Owners:** Gil (`@Gil-netizen`); future Android architecture maintainers
 - **Decision scope:** Android application composition, feature entry points, repository construction, and dependency direction
 - **Supersedes:** none
-- **Related:** [Issue #3](https://github.com/Gil-netizen/aseh/issues/3), [pull request #4](https://github.com/Gil-netizen/aseh/pull/4), [ExecPlan 0002](../plans/0002-android-walking-skeleton.md), [ADR-0003](0003-database-and-data-class-separation.md)
+- **Related:** [Issue #3](https://github.com/Gil-netizen/aseh/issues/3), [pull request #4](https://github.com/Gil-netizen/aseh/pull/4), [ExecPlan 0002](../plans/0002-android-walking-skeleton.md), [Issue #5](https://github.com/Gil-netizen/aseh/issues/5), [ExecPlan 0003](../plans/0003-offline-now-context.md), [ADR-0003](0003-database-and-data-class-separation.md)
 
 ## Context
 
