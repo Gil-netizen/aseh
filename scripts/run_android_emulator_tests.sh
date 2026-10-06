@@ -64,7 +64,12 @@ if [[ -z "${avd_name}" || -z "${android_release}" ]]; then
 fi
 mkdir -p \
   "app/build/outputs/connected_android_test_additional_output/devDebugAndroidTest/connected/${avd_name}(AVD) - ${android_release}"
-adb shell rm -rf /sdcard/googletest/test_outputfiles
+
+# TestStorage owns the output root on newer Android images, so deleting that
+# directory itself fails even when it is empty. Remove only ASEH's known files.
+adb shell rm -f \
+  /sdcard/googletest/test_outputfiles/english-ltr.png \
+  /sdcard/googletest/test_outputfiles/hebrew-rtl.png
 
 # The launch smoke test deliberately leaves the debug app installed. Remove
 # that exact package so a repeated local run starts from the same state as CI.
