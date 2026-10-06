@@ -5,7 +5,7 @@
 - **Owners:** Gil (`@Gil-netizen`); future Android architecture maintainers
 - **Decision scope:** Android application composition, feature entry points, repository construction, and dependency direction
 - **Supersedes:** none
-- **Related:** [Issue #3](https://github.com/Gil-netizen/aseh/issues/3), [ExecPlan 0002](../plans/0002-android-walking-skeleton.md), [ADR-0003](0003-database-and-data-class-separation.md)
+- **Related:** [Issue #3](https://github.com/Gil-netizen/aseh/issues/3), [pull request #4](https://github.com/Gil-netizen/aseh/pull/4), [ExecPlan 0002](../plans/0002-android-walking-skeleton.md), [ADR-0003](0003-database-and-data-class-separation.md)
 
 ## Context
 

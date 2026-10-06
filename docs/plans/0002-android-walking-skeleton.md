@@ -4,7 +4,7 @@
 **Owner:** Gil\
 **Started:** 2026-10-06\
 **Last updated:** 2026-10-06\
-**Issue/PR:** [GitHub issue #3](https://github.com/Gil-netizen/aseh/issues/3)\
+**Issue/PR:** [GitHub issue #3](https://github.com/Gil-netizen/aseh/issues/3), [pull request #4](https://github.com/Gil-netizen/aseh/pull/4)\
 **Related ADRs:** [ADR-0003](../adr/0003-database-and-data-class-separation.md), [ADR-0005](../adr/0005-pinned-android-toolchain.md), [proposed ADR-0006](../adr/0006-manual-app-composition.md)
 
 This plan implements specification Step 2 as one reviewable pull request. It
@@ -199,7 +199,7 @@ pass on each fixed runner and emit English-LTR/Hebrew-locale RTL PNG evidence.
 - [x] 2026-10-06 02:48 +03:00 — Final local API 26 phone and API 37 tablet device suites pass; API 37 also passes at 200% font scale.
 - [x] 2026-10-06 02:56 +03:00 — ADR-0003 backup and persistence-boundary policy checks pass with 13 focused checker tests.
 - [ ] 2026-10-06 02:48 +03:00 — GitHub API 26/API 37 CI matrix passes.
-- [ ] 2026-10-06 01:23 +03:00 — Pull request contains final evidence and is ready for Gil's review.
+- [x] 2026-10-06 03:04 +03:00 — Pull request #4 contains final local evidence and is ready for CI and Gil's review.
 
 ## Decisions
 
