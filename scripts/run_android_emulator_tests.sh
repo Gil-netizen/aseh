@@ -291,8 +291,11 @@ if [[ ! -s "${artifact_dir}/launch.png" ]]; then
   exit 1
 fi
 
-if adb shell uiautomator dump /sdcard/aseh-window.xml >/dev/null 2>&1; then
-  adb pull /sdcard/aseh-window.xml "${artifact_dir}/window.xml" >/dev/null
+hierarchy_log="${artifact_dir}/uiautomator-hierarchy.txt"
+if adb shell uiautomator dump /sdcard/aseh-window.xml >"${hierarchy_log}" 2>&1 \
+  && adb pull /sdcard/aseh-window.xml "${artifact_dir}/window.xml" \
+    >>"${hierarchy_log}" 2>&1; then
+  :
 else
   echo "UI Automator hierarchy capture was unavailable; the PNG evidence was retained." >&2
 fi
