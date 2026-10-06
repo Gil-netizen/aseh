@@ -202,6 +202,7 @@ pass on each fixed runner and emit English-LTR/Hebrew-locale RTL PNG evidence.
 - [x] 2026-10-06 06:31 +03:00 — [Dependency review run 37407878693](https://github.com/Gil-netizen/aseh/actions/runs/37407878693) accepts the locked Gradle dependency snapshot and passes GitHub's high/critical gate plus the report-only OSV scan.
 - [x] 2026-10-06 06:31 +03:00 — Pull request #4 reached its first complete local and CI evidence point before the later security and runner hardening commits.
 - [x] 2026-10-06 07:56 +03:00 — Diagnosed the later API 37-only failure in [Android CI run 37413794548](https://github.com/Gil-netizen/aseh/actions/runs/37413794548) as Android 17's task-snapshot persister entering a broken `mapper.ranchu` host-buffer read after all app assertions had run; the runner now disables that system path only on the exact revision-checked image and verifies the controller state before and after every connected suite.
+- [x] 2026-10-06 08:31 +03:00 — Diagnosed [Android CI run 37416949384](https://github.com/Gil-netizen/aseh/actions/runs/37416949384) failing before instrumentation after generic `-gpu software` resolved to Lavapipe/SwANGLE in that run and SurfaceFlinger restarted during the navigation-overlay transition. The exact image passes the complete app, database, screenshot, and offline-launch suite with explicit `-gpu swiftshader`; the runner requires the mapper's DMA extension and rechecks WindowManager readiness immediately before task-snapshot suppression.
 - [ ] Gil accepts or rejects proposed ADR-0006.
 - [ ] Human reviewers complete English/Hebrew visual, TalkBack, keyboard, full process-death, and 200% text review.
 
@@ -230,10 +231,11 @@ pass on each fixed runner and emit English-LTR/Hebrew-locale RTL PNG evidence.
 | 2026-10-06 | Strict dependency locks and `failOnNonReproducibleResolution()` are mutually exclusive in Gradle 9.6 | The first strict build failed before resolution | Keep strict locks and the catalog selector gate; remove the conflicting resolution strategy. |
 | 2026-10-06 | `actions/setup-java` accepts the four-component OpenJDK release `17.0.20.1+1` as Adoptium SemVer `17.0.20+101` | The first GitHub build failed before setup because the OpenJDK spelling is not valid SemVer; Adoptium's release API reports both forms | Request the exact SemVer and fail CI unless the installed runtime still reports `17.0.20.1+1` from Eclipse Adoptium. |
 | 2026-10-06 | A cold Linux plugin classpath resolves four Maven metadata files that the warm Windows cache did not request during verification generation | The second GitHub build failed strict verification on one Guava parent POM, two JUnit BOM modules, and one coroutines BOM POM | Authenticate each artifact against Maven Central's published SHA-1 sidecar and add the SHA-256 of those same bytes to strict verification metadata. |
-| 2026-10-06 | The API 37 emulator's gestural `RegionSampling` path aborts SurfaceFlinger in `mapper.ranchu` | CI crash diagnostics showed `SIGABRT` before instrumentation; the same pinned image passes with Android's three-button navigation overlay | Select software rendering and enable the official three-button overlay before the stable-service wait, while retaining fail-closed emulator diagnostics. |
+| 2026-10-06 | The API 37 emulator's `RegionSampling` path can abort SurfaceFlinger in `mapper.ranchu` | CI crash diagnostics showed `SIGABRT` before instrumentation; a later run proved the crash can occur after Android's three-button overlay is active | Keep the overlay only for deterministic navigation geometry; control the graphics path with an explicit renderer and retain fail-closed emulator diagnostics. |
 | 2026-10-06 | API 37 can return success from optional `uiautomator dump` without creating its requested XML file | Run 37409626167 passed both connected suites and captured the offline-launch PNG, then failed while pulling the absent optional hierarchy | Guard the dump and pull as one optional evidence operation and retain their combined diagnostic log without weakening required PNG or process checks. |
 | 2026-10-06 | API 37 can report boot and core services ready while user 0 app storage is still being prepared | Run 37411267767 set `sys.user.0.ce_available=true` at 04:14:55.060 UTC, then failed to create DataStore directories before user 0 reached `RUNNING_UNLOCKED` at 04:15:01.348 UTC | Require user 0 to be `RUNNING_UNLOCKED` on every test API and require `sys.user.0.ce_available=true` on API 27 and later, for three consecutive readiness checks before each connected suite. |
 | 2026-10-06 | Android 17 image revision 6 can abort `system_server` when `TaskSnapshotPersister` converts a real task snapshot through `GoldfishMapper::readFromHost` | Run 37413794548 passed the first three app tests, then tombstoned `system_server` on its task-snapshot persistence thread with the mapper feature assertion; AOSP's Android 17 WindowManager contract and a live exact-image probe confirmed the controller switch | On only the revision-checked API 37 image, call Android 17's `IWindowManager.setTaskSnapshotEnabled(false)` binder transaction before app launch and fail unless the task controller reports `mSnapshotEnabled=false` before and after each suite. |
+| 2026-10-06 | Emulator 37.2.12 resolved generic `software` mode to Lavapipe for Vulkan and SwANGLE for GLES in a run where API 37 `RegionSampling` aborted SurfaceFlinger during the navigation-overlay transition | Run 37416949384 crashed before the WindowManager call; the same emulator and image completed both connected suites, required screenshots, and offline launch with explicit `-gpu swiftshader` | Pin the supported explicit SwiftShader backend, fail unless SurfaceFlinger advertises `ANDROID_EMU_read_color_buffer_dma`, and require the `window` service to be stable again immediately before the image-gated task-snapshot transaction. |
 | 2026-10-06 | GitHub's generated Automatic Dependency Submission resolves 534 Gradle configurations, including seven transient AGP metadata configurations without lock state | Managed run 37407415864 failed at `debugImplementationDependenciesMetadata`; an audited repository workflow selected 90/90 locked compile/runtime classpaths and submitted its snapshot successfully | Disable the generated job and keep the pinned, repository-owned dependency-submission job. |
 | 2026-10-06 | The only remaining OSV finding is a Moderate build-only advisory in `kotlin-gradle-plugin:2.2.10`; the first fixed release is preview `2.4.20-Beta1` | A hash-stable local scan found zero advisories in 331 locked components and no high, critical, or runtime finding | Report the advisory for owner review and retain the stable toolchain pin until a stable compatible fix exists. |
 
@@ -270,12 +272,14 @@ Room migration; destructive fallback remains disabled.
 
 ## Residual risks and handoff
 
-- API 37 CI uses software rendering plus the verified three-button navigation
-  overlay to avoid an emulator-host `RegionSampling` crash. On the exact pinned
-  Android 17 image revision, it also disables task snapshot capture and
-  persistence to bypass a separate `TaskSnapshotPersister` mapper crash. The
-  script verifies both system controls and retains diagnostics if the emulator
-  becomes unstable.
+- API 37 CI uses the explicit SwiftShader software backend to avoid the
+  emulator-host `RegionSampling` failure observed with generic software mode.
+  It fails closed unless SurfaceFlinger advertises the DMA extension required
+  by the mapper and pins three-button navigation for deterministic geometry. On
+  the exact pinned Android 17 image revision, it also disables task snapshot
+  capture and persistence to bypass a separate `TaskSnapshotPersister` mapper
+  crash. The script rechecks WindowManager readiness, verifies both system
+  controls, and retains diagnostics if the emulator becomes unstable.
 - Automated bounds and semantics assertions do not replace human Hebrew,
   English, TalkBack, keyboard, full process-death, and 200% visual review.
 - Proposed ADR-0006 requires Gil's human review in the implementing PR before

@@ -173,6 +173,7 @@ jobs:
             system-image-revision: '16'
             profile: pixel_2
             gpu-mode: swiftshader_indirect
+            required-graphics-extension: none
             navigation-mode: default
             task-snapshot-mode: default
             font-scale: '1.0'
@@ -182,11 +183,11 @@ jobs:
             system-image: system-images;android-37.0;google_apis;x86_64
             system-image-revision: '6'
             profile: pixel_c
-            # The emulator 37 renderer crashes SurfaceFlinger in
-            # swiftshader_indirect; software mode is the supported fallback.
-            gpu-mode: software
-            # The API 37 image's gestural RegionSampling path crashes
-            # mapper.ranchu; three-button mode removes that system trigger.
+            # Generic software mode used Lavapipe/SwANGLE in the failed run.
+            # Keep GLES and Vulkan on the explicit supported SwiftShader mode.
+            gpu-mode: swiftshader
+            required-graphics-extension: ANDROID_EMU_read_color_buffer_dma
+            # Pin navigation geometry for deterministic tablet assertions.
             navigation-mode: threebutton
             # Android 17 image revision 6 can abort system_server while its
             # task-snapshot persister reads a host color buffer. Disable only
@@ -284,6 +285,7 @@ jobs:
           script: >-
             ASEH_FONT_SCALE="${{ matrix.font-scale }}"
             ASEH_GPU_MODE="${{ matrix.gpu-mode }}"
+            ASEH_REQUIRED_GRAPHICS_EXTENSION="${{ matrix.required-graphics-extension }}"
             ASEH_NAVIGATION_MODE="${{ matrix.navigation-mode }}"
             ASEH_TASK_SNAPSHOT_MODE="${{ matrix.task-snapshot-mode }}"
             ASEH_SYSTEM_IMAGE="${{ matrix.system-image }}"

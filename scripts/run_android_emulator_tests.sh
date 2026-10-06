@@ -25,6 +25,7 @@ android_services_ready() {
   local package_service_output
   local user_ce_available
   local user_state_output
+  local window_service_output
 
   android_sdk="$(adb shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r' || true)"
   boot_completed="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
@@ -33,6 +34,7 @@ android_services_ready() {
   package_output="$(adb shell cmd package list packages 2>/dev/null | tr -d '\r' || true)"
   activity_output="$(adb shell service check activity 2>/dev/null | tr -d '\r' || true)"
   package_service_output="$(adb shell service check package 2>/dev/null | tr -d '\r' || true)"
+  window_service_output="$(adb shell service check window 2>/dev/null | tr -d '\r' || true)"
 
   [[ "${android_sdk}" =~ ^[0-9]+$ ]] || return 1
   # The pinned API 26 image does not expose the CE property; the user-state
@@ -45,7 +47,8 @@ android_services_ready() {
     && [[ "${user_state_output}" == "RUNNING_UNLOCKED" ]] \
     && grep -q '^package:' <<<"${package_output}" \
     && grep -Eq '^Service activity: found[[:space:]]*$' <<<"${activity_output}" \
-    && grep -Eq '^Service package: found[[:space:]]*$' <<<"${package_service_output}"
+    && grep -Eq '^Service package: found[[:space:]]*$' <<<"${package_service_output}" \
+    && grep -Eq '^Service window: found[[:space:]]*$' <<<"${window_service_output}"
 }
 
 wait_for_android_services() {
@@ -61,8 +64,36 @@ wait_for_android_services() {
     fi
     sleep 2
   done
-  echo "Android's boot, user credential storage, activity, and package services were not stable within 60 seconds." >&2
+  echo "Android's boot, user credential storage, activity, package, and window services were not stable within 60 seconds." >&2
   return 1
+}
+
+assert_graphics_compatibility() {
+  local required_extension="${ASEH_REQUIRED_GRAPHICS_EXTENSION:-none}"
+  local surfaceflinger_dump="${diagnostic_dir}/surfaceflinger.txt"
+
+  case "${required_extension}" in
+    none)
+      return 0
+      ;;
+    ANDROID_EMU_read_color_buffer_dma)
+      ;;
+    *)
+      echo "Unsupported required graphics extension: ${required_extension}." >&2
+      return 1
+      ;;
+  esac
+
+  if ! adb shell dumpsys SurfaceFlinger >"${surfaceflinger_dump}" 2>&1; then
+    echo "Unable to inspect SurfaceFlinger graphics capabilities." >&2
+    return 1
+  fi
+  if ! grep -Eq \
+    "(^|[[:space:]])${required_extension}([[:space:]]|$)" \
+    "${surfaceflinger_dump}"; then
+    echo "Required SurfaceFlinger extension ${required_extension} is unavailable." >&2
+    return 1
+  fi
 }
 
 configure_navigation_mode() {
@@ -150,6 +181,10 @@ configure_task_snapshot_mode() {
   # exact image above, IWindowManager transaction 137 is
   # setTaskSnapshotEnabled(boolean). Disabling it bypasses capture and the
   # failing asynchronous persistence path without changing app behavior.
+  # Navigation-overlay application can finish by restarting SurfaceFlinger,
+  # zygote, and system_server after its earlier readiness check. Recheck the
+  # exact services immediately before calling WindowManager.
+  wait_for_android_services
   if ! adb shell service call window 137 i32 0 \
     >"${diagnostic_dir}/task-snapshot-command.txt" 2>&1; then
     echo "Unable to disable Android task snapshots on the pinned API 37 image." >&2
@@ -176,12 +211,14 @@ capture_android_diagnostics() {
   adb shell df -k >"${output_dir}/filesystems.txt" 2>&1 || true
   adb shell ps -A >"${output_dir}/processes.txt" 2>&1 || true
   adb shell dumpsys activity activities >"${output_dir}/activities.txt" 2>&1 || true
+  adb shell dumpsys SurfaceFlinger >"${output_dir}/surfaceflinger.txt" 2>&1 || true
   task_snapshot_controller_state >"${output_dir}/task-snapshot-controller.txt" 2>&1 || true
   adb shell ls -la /data/tombstones >"${output_dir}/tombstones.txt" 2>&1 || true
   adb logcat -b all -d -v threadtime >"${output_dir}/logcat.txt" 2>&1 || true
-  printf 'emulator_label=%s\nexit_code=%s\ngpu_mode=%s\nnavigation_mode=%s\ntask_snapshot_mode=%s\n' \
+  printf 'emulator_label=%s\nexit_code=%s\ngpu_mode=%s\nrequired_graphics_extension=%s\nnavigation_mode=%s\ntask_snapshot_mode=%s\n' \
     "${emulator_label}" "${exit_code}" "${ASEH_GPU_MODE:-unknown}" \
-    "${ASEH_NAVIGATION_MODE:-default}" "${ASEH_TASK_SNAPSHOT_MODE:-default}" \
+    "${ASEH_REQUIRED_GRAPHICS_EXTENSION:-none}" "${ASEH_NAVIGATION_MODE:-default}" \
+    "${ASEH_TASK_SNAPSHOT_MODE:-default}" \
     >"${output_dir}/runner-metadata.txt"
 }
 
@@ -197,6 +234,7 @@ capture_on_failure() {
 trap capture_on_failure EXIT
 
 wait_for_android_services
+assert_graphics_compatibility
 configure_navigation_mode
 
 sdkmanager_path="$(command -v sdkmanager 2>/dev/null || true)"
@@ -389,8 +427,9 @@ else
   echo "UI Automator hierarchy capture was unavailable; the PNG evidence was retained." >&2
 fi
 
-printf 'application_id=%s\napk=%s\nfont_scale=%s\ngpu_mode=%s\nnavigation_mode=%s\ntask_snapshot_mode=%s\n' \
+printf 'application_id=%s\napk=%s\nfont_scale=%s\ngpu_mode=%s\nrequired_graphics_extension=%s\nnavigation_mode=%s\ntask_snapshot_mode=%s\n' \
   "${application_id}" "${apk_path}" "${font_scale}" "${ASEH_GPU_MODE:-unknown}" \
-  "${ASEH_NAVIGATION_MODE:-default}" "${ASEH_TASK_SNAPSHOT_MODE:-default}" \
+  "${ASEH_REQUIRED_GRAPHICS_EXTENSION:-none}" "${ASEH_NAVIGATION_MODE:-default}" \
+  "${ASEH_TASK_SNAPSHOT_MODE:-default}" \
   >"${artifact_dir}/launch-metadata.txt"
 echo "Instrumentation and offline launcher smoke test passed on ${emulator_label}."
