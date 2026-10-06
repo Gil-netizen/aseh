@@ -172,6 +172,7 @@ jobs:
             system-image: system-images;android-26;google_apis;x86_64
             system-image-revision: '16'
             profile: pixel_2
+            gpu-mode: swiftshader_indirect
             font-scale: '1.0'
           - label: api-37-0
             api-level: '37.0'
@@ -179,6 +180,9 @@ jobs:
             system-image: system-images;android-37.0;google_apis;x86_64
             system-image-revision: '6'
             profile: pixel_c
+            # The emulator 37 renderer crashes SurfaceFlinger in
+            # swiftshader_indirect; software mode is the supported fallback.
+            gpu-mode: software
             font-scale: '2.0'
 
     steps:
@@ -265,11 +269,12 @@ jobs:
           avd-name: aseh-${{ matrix.label }}
           emulator-boot-timeout: '900'
           emulator-options: >-
-            -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+            -no-window -gpu ${{ matrix.gpu-mode }} -no-snapshot -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           disable-spellchecker: true
           script: >-
             ASEH_FONT_SCALE="${{ matrix.font-scale }}"
+            ASEH_GPU_MODE="${{ matrix.gpu-mode }}"
             ASEH_SYSTEM_IMAGE="${{ matrix.system-image }}"
             ASEH_SYSTEM_IMAGE_REVISION="${{ matrix.system-image-revision }}"
             bash scripts/run_android_emulator_tests.sh "${{ matrix.label }}"

@@ -9,7 +9,8 @@ fi
 
 emulator_label="${1:?usage: run_android_emulator_tests.sh <emulator-label>}"
 artifact_dir="build/outputs/smoke-screenshots/${emulator_label}"
-mkdir -p "${artifact_dir}"
+diagnostic_dir="build/reports/android-sdk/emulator-${emulator_label}"
+mkdir -p "${artifact_dir}" "${diagnostic_dir}"
 
 system_image="${ASEH_SYSTEM_IMAGE:?ASEH_SYSTEM_IMAGE must name the pinned emulator image}"
 system_image_revision="${ASEH_SYSTEM_IMAGE_REVISION:?ASEH_SYSTEM_IMAGE_REVISION must pin the image revision}"
@@ -47,6 +48,39 @@ require_sdk_revision "build-tools;37.0.0" "37.0.0"
 require_sdk_revision "platforms;android-37.0" "2"
 require_sdk_revision "${system_image}" "${system_image_revision}"
 
+capture_android_diagnostics() {
+  local reason="$1"
+  local exit_code="$2"
+  local output_dir="${diagnostic_dir}/${reason}"
+  mkdir -p "${output_dir}"
+
+  adb get-state >"${output_dir}/adb-state.txt" 2>&1 || true
+  adb shell getprop >"${output_dir}/properties.txt" 2>&1 || true
+  adb shell service list >"${output_dir}/services.txt" 2>&1 || true
+  adb shell service check activity >"${output_dir}/activity-service.txt" 2>&1 || true
+  adb shell service check package >"${output_dir}/package-service.txt" 2>&1 || true
+  adb shell cat /proc/meminfo >"${output_dir}/meminfo.txt" 2>&1 || true
+  adb shell df -k >"${output_dir}/filesystems.txt" 2>&1 || true
+  adb shell ps -A >"${output_dir}/processes.txt" 2>&1 || true
+  adb shell dumpsys activity activities >"${output_dir}/activities.txt" 2>&1 || true
+  adb shell ls -la /data/tombstones >"${output_dir}/tombstones.txt" 2>&1 || true
+  adb logcat -d -v threadtime >"${output_dir}/logcat.txt" 2>&1 || true
+  printf 'emulator_label=%s\nexit_code=%s\ngpu_mode=%s\n' \
+    "${emulator_label}" "${exit_code}" "${ASEH_GPU_MODE:-unknown}" \
+    >"${output_dir}/runner-metadata.txt"
+}
+
+capture_on_failure() {
+  local exit_code=$?
+  trap - EXIT
+  if (( exit_code != 0 )); then
+    set +e
+    capture_android_diagnostics "script-failure" "${exit_code}"
+  fi
+  exit "${exit_code}"
+}
+trap capture_on_failure EXIT
+
 data_partition_report="build/reports/android-sdk/data-partition-${emulator_label}.txt"
 adb shell df -k /data | tr -d '\r' | tee "${data_partition_report}"
 data_available_kb="$(awk 'NR > 1 { print $(NF - 2); exit }' "${data_partition_report}")"
@@ -55,20 +89,55 @@ if [[ ! "${data_available_kb}" =~ ^[0-9]+$ ]] || (( data_available_kb < 2097152 
   exit 1
 fi
 
-wait_for_package_service() {
+android_services_ready() {
+  local activity_output
+  local boot_completed
   local package_output
+  local package_service_output
+
+  boot_completed="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
+  package_output="$(adb shell cmd package list packages 2>/dev/null | tr -d '\r' || true)"
+  activity_output="$(adb shell service check activity 2>/dev/null | tr -d '\r' || true)"
+  package_service_output="$(adb shell service check package 2>/dev/null | tr -d '\r' || true)"
+
+  [[ "${boot_completed}" == "1" ]] \
+    && grep -q '^package:' <<<"${package_output}" \
+    && grep -Eq '^Service activity: found[[:space:]]*$' <<<"${activity_output}" \
+    && grep -Eq '^Service package: found[[:space:]]*$' <<<"${package_service_output}"
+}
+
+wait_for_android_services() {
+  local consecutive=0
   for _ in $(seq 1 30); do
-    package_output="$(adb shell cmd package list packages 2>/dev/null | tr -d '\r' || true)"
-    if grep -q '^package:' <<<"${package_output}"; then
-      return 0
+    if android_services_ready; then
+      ((consecutive += 1))
+      if (( consecutive >= 3 )); then
+        return 0
+      fi
+    else
+      consecutive=0
     fi
     sleep 2
   done
-  echo "Android's package service did not become ready within 60 seconds." >&2
+  echo "Android's boot, activity, and package services were not stable within 60 seconds." >&2
   return 1
 }
 
+run_connected_suite() {
+  local task="$1"
+
+  wait_for_android_services
+  ./gradlew \
+    --no-daemon \
+    --no-parallel \
+    --stacktrace \
+    --dependency-verification strict \
+    "${task}"
+  wait_for_android_services
+}
+
 font_scale="${ASEH_FONT_SCALE:-1.0}"
+wait_for_android_services
 adb shell settings put system font_scale "${font_scale}"
 adb shell am broadcast -a android.intent.action.CONFIGURATION_CHANGED >/dev/null 2>&1 || true
 
@@ -98,15 +167,10 @@ fi
 
 # The launch smoke test deliberately leaves the debug app installed. Remove
 # that exact package so a repeated local run starts from the same state as CI.
-wait_for_package_service
+wait_for_android_services
 adb uninstall io.github.gilnetizen.aseh.dev.debug >/dev/null 2>&1 || true
 
-./gradlew \
-  --no-daemon \
-  --no-parallel \
-  --stacktrace \
-  --dependency-verification strict \
-  :app:connectedDevDebugAndroidTest
+run_connected_suite :app:connectedDevDebugAndroidTest
 
 assert_connected_test_success() {
   local module_directory="$1"
@@ -128,13 +192,7 @@ assert_connected_test_success() {
 
 assert_connected_test_success "app"
 
-wait_for_package_service
-./gradlew \
-  --no-daemon \
-  --no-parallel \
-  --stacktrace \
-  --dependency-verification strict \
-  :core:database:connectedDebugAndroidTest
+run_connected_suite :core:database:connectedDebugAndroidTest
 
 assert_connected_test_success "core/database"
 
@@ -210,6 +268,7 @@ else
   echo "UI Automator hierarchy capture was unavailable; the PNG evidence was retained." >&2
 fi
 
-printf 'application_id=%s\napk=%s\nfont_scale=%s\n' "${application_id}" "${apk_path}" "${font_scale}" \
+printf 'application_id=%s\napk=%s\nfont_scale=%s\ngpu_mode=%s\n' \
+  "${application_id}" "${apk_path}" "${font_scale}" "${ASEH_GPU_MODE:-unknown}" \
   >"${artifact_dir}/launch-metadata.txt"
 echo "Instrumentation and offline launcher smoke test passed on ${emulator_label}."
