@@ -49,7 +49,7 @@ require_sdk_revision "${system_image}" "${system_image_revision}"
 
 data_partition_report="build/reports/android-sdk/data-partition-${emulator_label}.txt"
 adb shell df -k /data | tr -d '\r' | tee "${data_partition_report}"
-data_available_kb="$(awk 'NR > 1 && $NF == "/data" { print $(NF - 2); exit }' "${data_partition_report}")"
+data_available_kb="$(awk 'NR > 1 { print $(NF - 2); exit }' "${data_partition_report}")"
 if [[ ! "${data_available_kb}" =~ ^[0-9]+$ ]] || (( data_available_kb < 2097152 )); then
   echo "The emulator must provide at least 2 GiB free on /data; found ${data_available_kb:-unknown} KiB." >&2
   exit 1
