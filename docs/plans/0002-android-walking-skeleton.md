@@ -197,9 +197,12 @@ pass on each fixed runner and emit English-LTR/Hebrew-locale RTL PNG evidence.
 - [x] 2026-10-06 02:35 +03:00 — Final strictly locked pinned build, tests, lint, and dev/staging/prod assemblies pass after lifecycle and rail review fixes.
 - [x] 2026-10-06 02:35 +03:00 — Locale-aware UI, rapid-selection persistence, Room, DataStore, and offline-policy tests pass.
 - [x] 2026-10-06 02:48 +03:00 — Final local API 26 phone and API 37 tablet device suites pass; API 37 also passes at 200% font scale.
-- [x] 2026-10-06 02:56 +03:00 — ADR-0003 backup and persistence-boundary policy checks pass with 13 focused checker tests.
-- [ ] 2026-10-06 02:48 +03:00 — GitHub API 26/API 37 CI matrix passes.
-- [x] 2026-10-06 03:04 +03:00 — Pull request #4 contains final local evidence and is ready for CI and Gil's review.
+- [x] 2026-10-06 02:56 +03:00 — ADR-0003 backup and persistence-boundary policy checks pass with 14 focused checker tests covering every Android backup domain.
+- [x] 2026-10-06 06:31 +03:00 — [GitHub Android CI run 37407878284](https://github.com/Gil-netizen/aseh/actions/runs/37407878284) passes the build/offline-policy job and both fixed API 26/API 37 instrumentation profiles.
+- [x] 2026-10-06 06:31 +03:00 — [Dependency review run 37407878693](https://github.com/Gil-netizen/aseh/actions/runs/37407878693) accepts the locked Gradle dependency snapshot and passes GitHub's high/critical gate plus the report-only OSV scan.
+- [x] 2026-10-06 06:31 +03:00 — Pull request #4 contains final local and CI evidence and is ready for Gil's accessibility and ADR review.
+- [ ] Gil accepts or rejects proposed ADR-0006.
+- [ ] Human reviewers complete English/Hebrew visual, TalkBack, keyboard, full process-death, and 200% text review.
 
 ## Decisions
 
@@ -208,6 +211,7 @@ pass on each fixed runner and emit English-LTR/Hebrew-locale RTL PNG evidence.
 | 2026-10-06 | Use manual constructor injection from `app` | Keeps the offline skeleton explicit and avoids adopting an unreviewed DI framework | [ADR-0006](../adr/0006-manual-app-composition.md) |
 | 2026-10-06 | Create only issue #3 modules | Every committed module has executable behavior or test support; later boundaries remain deliberate follow-ups | none |
 | 2026-10-06 | Capture screenshots with stable instrumented Compose APIs | The official host screenshot plugin is experimental and conflicts with stable-only bootstrap pins | none |
+| 2026-10-06 | Submit only locked compile/runtime classpaths from a repository-owned dependency workflow | GitHub's generated submission resolved transient AGP metadata configurations that have no lock state; all 90 selected classpaths are locked | none |
 
 ## Surprises and discoveries
 
@@ -225,18 +229,33 @@ pass on each fixed runner and emit English-LTR/Hebrew-locale RTL PNG evidence.
 | 2026-10-06 | Strict dependency locks and `failOnNonReproducibleResolution()` are mutually exclusive in Gradle 9.6 | The first strict build failed before resolution | Keep strict locks and the catalog selector gate; remove the conflicting resolution strategy. |
 | 2026-10-06 | `actions/setup-java` accepts the four-component OpenJDK release `17.0.20.1+1` as Adoptium SemVer `17.0.20+101` | The first GitHub build failed before setup because the OpenJDK spelling is not valid SemVer; Adoptium's release API reports both forms | Request the exact SemVer and fail CI unless the installed runtime still reports `17.0.20.1+1` from Eclipse Adoptium. |
 | 2026-10-06 | A cold Linux plugin classpath resolves four Maven metadata files that the warm Windows cache did not request during verification generation | The second GitHub build failed strict verification on one Guava parent POM, two JUnit BOM modules, and one coroutines BOM POM | Authenticate each artifact against Maven Central's published SHA-1 sidecar and add the SHA-256 of those same bytes to strict verification metadata. |
+| 2026-10-06 | The API 37 emulator's gestural `RegionSampling` path aborts SurfaceFlinger in `mapper.ranchu` | CI crash diagnostics showed `SIGABRT` before instrumentation; the same pinned image passes with Android's three-button navigation overlay | Select software rendering and enable the official three-button overlay before the stable-service wait, while retaining fail-closed emulator diagnostics. |
+| 2026-10-06 | GitHub's generated Automatic Dependency Submission resolves 534 Gradle configurations, including seven transient AGP metadata configurations without lock state | Managed run 37407415864 failed at `debugImplementationDependenciesMetadata`; an audited repository workflow selected 90/90 locked compile/runtime classpaths and submitted its snapshot successfully | Disable the generated job and keep the pinned, repository-owned dependency-submission job. |
+| 2026-10-06 | The only remaining OSV finding is a Moderate build-only advisory in `kotlin-gradle-plugin:2.2.10`; the first fixed release is preview `2.4.20-Beta1` | A hash-stable local scan found zero advisories in 331 locked components and no high, critical, or runtime finding | Report the advisory for owner review and retain the stable toolchain pin until a stable compatible fix exists. |
 
 ## Verification and acceptance
 
-Final evidence records exact command output for wrapper checksum, environment
-diagnostics, dependency verification, locks, unit tests, lint, debug and
-release-like assemblies, merged-manifest inspection, schema exports, and API
-26/API 37 connected tests. Instrumented screenshots use only synthetic content
-and cover English LTR, Hebrew-locale RTL, phone and tablet navigation, 200% font
-scale, and mixed script. Automated checks cover tab roles, reachability, logical
-visual order, minimum target size, mirroring, and persistence. A human
-Hebrew/English visual, TalkBack, keyboard, and full process-death review remains
-a PR review item; automation cannot grant it.
+The final strict local validation command:
+
+```text
+.\gradlew.bat --no-daemon --stacktrace --dependency-verification strict clean checkNoDynamicVersions test lint assembleDevDebug assembleStagingRelease assembleProdRelease :app:assembleDevDebugAndroidTest :core:database:assembleDebugAndroidTest
+```
+
+completed 872 actionable tasks: 750 executed and 122 served from cache. The
+focused repository-policy suite passes 14/14, XML and shell checks pass, and
+`actionlint` reports no workflow errors. Local API 26 phone and API 37 tablet
+profiles pass all four application tests, all six database tests, offline
+launch, and synthetic English-LTR/Hebrew-locale RTL screenshot capture; API 37
+also passes at 200% text.
+
+GitHub [Android CI run 37407878284](https://github.com/Gil-netizen/aseh/actions/runs/37407878284),
+[dependency review run 37407878693](https://github.com/Gil-netizen/aseh/actions/runs/37407878693),
+and [repository policy run 37407878293](https://github.com/Gil-netizen/aseh/actions/runs/37407878293)
+pass on commit `48b6657d9e568cd892e7898ac026e5bb43ae4ff9`.
+Automated checks cover tab roles, reachability, logical visual order, minimum
+target size, mirroring, persistence, manifests, dependency policy, and backup
+exclusions. Human Hebrew/English visual, TalkBack, keyboard, full process-death,
+and 200% review remains required; automation cannot grant it.
 
 ## Rollout and recovery
 
@@ -247,18 +266,29 @@ Room migration; destructive fallback remains disabled.
 
 ## Residual risks and handoff
 
-- Emulator availability can prevent local connected evidence; fixed CI images
-  remain required before merge.
+- API 37 CI uses software rendering plus the verified three-button navigation
+  overlay to avoid an emulator-host `RegionSampling` crash. The script fails
+  closed and retains diagnostics if the overlay or emulator becomes unstable.
 - Automated bounds and semantics assertions do not replace human Hebrew,
-  English, TalkBack, keyboard, and 200% visual review.
+  English, TalkBack, keyboard, full process-death, and 200% visual review.
 - Proposed ADR-0006 requires Gil's human review in the implementing PR before
   it becomes Accepted.
+- `kotlin-gradle-plugin:2.2.10` has Moderate build-only advisory
+  `GHSA-r937-wjx7-w2jp` / `CVE-2026-53914` (CVSS 6.7). Its first fixed release
+  is preview `2.4.20-Beta1`, so the stable-only toolchain remains pinned; no
+  locked runtime, high, or critical finding remains.
 - `RIGHTS-004` remains open and blocks distributable corpus content; it does not
   block this synthetic no-content scaffold.
 
 ## Outcomes
 
-The strictly verified local build, unit tests, lint, all three requested APK
-variants, and both fixed local emulator profiles pass. The implementation is
-ready for GitHub CI and human accessibility/ADR review; those results will be
-recorded in the pull request before this plan is marked complete.
+The final strictly verified local suite and all relevant GitHub jobs pass. The
+accepted dependency snapshot covers 90 fully locked compile/runtime classpath
+configurations; GitHub rejects newly introduced high or critical
+vulnerabilities, while OSV reports lower-severity findings for explicit owner
+review. A supplemental audit of 331 locked coordinates found no lockfile or
+runtime findings; the one remaining advisory affects build tooling only.
+
+This ExecPlan remains Active pending Gil's ADR-0006 decision and the required
+human accessibility review. The scaffold remains unsigned and unpublished; no
+artifact has been tagged, submitted to a store, or publicly deployed.
