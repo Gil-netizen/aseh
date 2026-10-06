@@ -198,7 +198,7 @@ pass on each fixed runner and emit English-LTR/Hebrew-locale RTL PNG evidence.
 - [x] 2026-10-06 02:35 +03:00 — Locale-aware UI, rapid-selection persistence, Room, DataStore, and offline-policy tests pass.
 - [x] 2026-10-06 02:48 +03:00 — Final local API 26 phone and API 37 tablet device suites pass; API 37 also passes at 200% font scale.
 - [x] 2026-10-06 02:56 +03:00 — ADR-0003 backup and persistence-boundary policy checks pass with 14 focused checker tests covering every Android backup domain.
-- [x] 2026-10-06 06:31 +03:00 — [GitHub Android CI run 37407878284](https://github.com/Gil-netizen/aseh/actions/runs/37407878284) passes the build/offline-policy job and both fixed API 26/API 37 instrumentation profiles.
+- [x] 2026-10-06 06:31 +03:00 — GitHub Android CI run `37407878284` passes the build/offline-policy job and both fixed API 26/API 37 instrumentation profiles.
 - [x] 2026-10-06 06:31 +03:00 — [Dependency review run 37407878693](https://github.com/Gil-netizen/aseh/actions/runs/37407878693) accepts the locked Gradle dependency snapshot and passes GitHub's high/critical gate plus the report-only OSV scan.
 - [x] 2026-10-06 06:31 +03:00 — Pull request #4 reached its first complete local and CI evidence point before the later security and runner hardening commits.
 - [x] 2026-10-06 07:56 +03:00 — Diagnosed the later API 37-only failure in [Android CI run 37413794548](https://github.com/Gil-netizen/aseh/actions/runs/37413794548) as Android 17's task-snapshot persister entering a broken `mapper.ranchu` host-buffer read after all app assertions had run; the runner now disables that system path only on the exact revision-checked image and verifies the controller state before and after every connected suite.
@@ -257,7 +257,7 @@ profiles pass all four application tests, all six database tests, offline
 launch, and synthetic English-LTR/Hebrew-locale RTL screenshot capture; API 37
 also passes at 200% text.
 
-GitHub [Android CI run 37407878284](https://github.com/Gil-netizen/aseh/actions/runs/37407878284),
+GitHub Android CI run `37407878284`,
 [dependency review run 37407878693](https://github.com/Gil-netizen/aseh/actions/runs/37407878693),
 and [repository policy run 37407878293](https://github.com/Gil-netizen/aseh/actions/runs/37407878293)
 pass on commit `48b6657d9e568cd892e7898ac026e5bb43ae4ff9`.

@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
   <string name="app_name" translatable="false">ASEH</string>
+  <string name="app_place_context_missing_title">No place set</string>
+  <string name="app_place_context_missing_summary">Use this device’s location to calculate Jewish dates and solar times offline.</string>
+  <string name="app_place_context_active_title">Active place</string>
+  <string name="app_place_context_device_label">Saved device location</string>
+  <string name="app_place_context_setup">Set up place</string>
+  <string name="app_place_context_change">Change place</string>
 </resources>

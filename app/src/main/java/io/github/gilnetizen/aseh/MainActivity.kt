@@ -16,6 +16,8 @@ class MainActivity : AppCompatActivity() {
         clock = graph.clock,
         deviceTimeZone = graph.deviceTimeZone,
         interfacePreferencesRepository = graph.interfacePreferencesRepository,
+        manualPlaceContextRepository = graph.manualPlaceContextRepository,
+        deviceLocationClient = graph.deviceLocationClient,
         onSelectedDestinationChanged = graph::setSelectedDestinationId,
       )
     }
