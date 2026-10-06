@@ -3,7 +3,7 @@ package io.github.gilnetizen.aseh.core.database
 import kotlinx.coroutines.flow.Flow
 
 /**
- * One user-supplied place used to interpret device-local civil context.
+ * One user-confirmed place used to interpret local calendar context.
  *
  * The model contains no Android or persistence types. Repository adapters
  * validate it before storage so feature modules can stay behind this narrow
@@ -15,7 +15,14 @@ data class ManualPlaceContext(
     val longitudeDegrees: Double,
     val elevationMeters: Double?,
     val timeZoneId: String,
+    val source: PlaceContextSource = PlaceContextSource.MANUAL,
+    val horizontalAccuracyMeters: Double? = null,
 )
+
+enum class PlaceContextSource {
+    MANUAL,
+    DEVICE,
+}
 
 interface ManualPlaceContextRepository {
     val context: Flow<ManualPlaceContext?>

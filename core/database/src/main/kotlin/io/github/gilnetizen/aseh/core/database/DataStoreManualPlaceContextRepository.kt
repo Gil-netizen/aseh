@@ -61,11 +61,19 @@ internal class DataStoreManualPlaceContextRepository(
             values[ManualPlacePreferenceKeys.latitudeDegrees] = validated.latitudeDegrees
             values[ManualPlacePreferenceKeys.longitudeDegrees] = validated.longitudeDegrees
             values[ManualPlacePreferenceKeys.timeZoneId] = validated.timeZoneId
+            values[ManualPlacePreferenceKeys.source] = validated.source.name
             val elevationMeters = validated.elevationMeters
             if (elevationMeters == null) {
                 values.remove(ManualPlacePreferenceKeys.elevationMeters)
             } else {
                 values[ManualPlacePreferenceKeys.elevationMeters] = elevationMeters
+            }
+            val horizontalAccuracyMeters = validated.horizontalAccuracyMeters
+            if (horizontalAccuracyMeters == null) {
+                values.remove(ManualPlacePreferenceKeys.horizontalAccuracyMeters)
+            } else {
+                values[ManualPlacePreferenceKeys.horizontalAccuracyMeters] =
+                    horizontalAccuracyMeters
             }
         }
     }
@@ -77,9 +85,21 @@ internal class DataStoreManualPlaceContextRepository(
 
 private fun Preferences.toManualPlaceContextOrNull(): ManualPlaceContext? {
     val values = asMap()
+    val sourceValue = values[ManualPlacePreferenceKeys.source]
+    val source = when (sourceValue) {
+        null -> PlaceContextSource.MANUAL
+        is String -> runCatching { PlaceContextSource.valueOf(sourceValue) }.getOrNull()
+            ?: return null
+        else -> return null
+    }
     val elevationValue = values[ManualPlacePreferenceKeys.elevationMeters]
+    val accuracyValue = values[ManualPlacePreferenceKeys.horizontalAccuracyMeters]
     val candidate = ManualPlaceContext(
-        label = values[ManualPlacePreferenceKeys.label] as? String ?: return null,
+        label = when (val labelValue = values[ManualPlacePreferenceKeys.label]) {
+            null -> if (source == PlaceContextSource.DEVICE) "" else return null
+            is String -> labelValue
+            else -> return null
+        },
         latitudeDegrees = values[ManualPlacePreferenceKeys.latitudeDegrees] as? Double
             ?: return null,
         longitudeDegrees = values[ManualPlacePreferenceKeys.longitudeDegrees] as? Double
@@ -90,6 +110,12 @@ private fun Preferences.toManualPlaceContextOrNull(): ManualPlaceContext? {
             else -> return null
         },
         timeZoneId = values[ManualPlacePreferenceKeys.timeZoneId] as? String ?: return null,
+        source = source,
+        horizontalAccuracyMeters = when (accuracyValue) {
+            null -> null
+            is Double -> accuracyValue
+            else -> return null
+        },
     )
     return candidate.takeIf(ManualPlaceContext::isValidStoredValue)
 }
@@ -98,16 +124,16 @@ private fun ManualPlaceContext.validatedForStorage(): ManualPlaceContext {
     val normalizedLabel = label.trim()
     val normalized = copy(label = normalizedLabel)
     require(normalized.isValidStoredValue()) {
-        "Manual place requires a non-blank label of at most " +
+        "Place context requires a manual label when manually entered, at most " +
             "$MAX_MANUAL_PLACE_LABEL_LENGTH characters, finite latitude from -90 to 90, " +
-            "finite longitude from -180 to 180, optional finite elevation, and an " +
-            "available IANA time-zone ID"
+            "finite longitude from -180 to 180, optional finite elevation and accuracy, " +
+            "a known source, and an available IANA time-zone ID"
     }
     return normalized
 }
 
 private fun ManualPlaceContext.isValidStoredValue(): Boolean =
-    label.isNotBlank() &&
+    (source == PlaceContextSource.DEVICE || label.isNotBlank()) &&
         label == label.trim() &&
         label.length <= MAX_MANUAL_PLACE_LABEL_LENGTH &&
         latitudeDegrees.isFinite() &&
@@ -115,6 +141,8 @@ private fun ManualPlaceContext.isValidStoredValue(): Boolean =
         longitudeDegrees.isFinite() &&
         longitudeDegrees in MIN_LONGITUDE_DEGREES..MAX_LONGITUDE_DEGREES &&
         (elevationMeters == null || elevationMeters.isFinite()) &&
+        (horizontalAccuracyMeters == null ||
+            (horizontalAccuracyMeters.isFinite() && horizontalAccuracyMeters >= 0.0)) &&
         timeZoneId in AVAILABLE_TIME_ZONE_IDS
 
 private object ManualPlacePreferenceKeys {
@@ -123,6 +151,8 @@ private object ManualPlacePreferenceKeys {
     val longitudeDegrees = doublePreferencesKey("longitude_degrees")
     val elevationMeters = doublePreferencesKey("elevation_meters")
     val timeZoneId = stringPreferencesKey("time_zone_id")
+    val source = stringPreferencesKey("source")
+    val horizontalAccuracyMeters = doublePreferencesKey("horizontal_accuracy_meters")
 }
 
 private val AVAILABLE_TIME_ZONE_IDS: Set<String> = ZoneId.getAvailableZoneIds()

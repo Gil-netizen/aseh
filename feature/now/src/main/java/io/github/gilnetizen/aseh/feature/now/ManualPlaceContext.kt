@@ -9,13 +9,53 @@ data class NowPlaceContext(
     val longitudeDegrees: Double,
     val elevationMeters: Double?,
     val timeZoneId: String,
+    val source: NowPlaceSource = NowPlaceSource.MANUAL,
+    val horizontalAccuracyMeters: Double? = null,
 ) {
     init {
-        require(label == label.trim() && label.isNotEmpty() && label.length <= MAX_PLACE_LABEL_LENGTH)
+        require(
+            label == label.trim() &&
+                label.length <= MAX_PLACE_LABEL_LENGTH &&
+                (source == NowPlaceSource.DEVICE || label.isNotEmpty()),
+        )
         require(latitudeDegrees.isFinite() && latitudeDegrees in -90.0..90.0)
         require(longitudeDegrees.isFinite() && longitudeDegrees in -180.0..180.0)
         require(elevationMeters == null || elevationMeters.isFinite())
+        require(
+            horizontalAccuracyMeters == null ||
+                (horizontalAccuracyMeters.isFinite() && horizontalAccuracyMeters >= 0.0),
+        )
         require(timeZoneId in ZoneId.getAvailableZoneIds())
+    }
+}
+
+enum class NowPlaceSource {
+    MANUAL,
+    DEVICE,
+}
+
+sealed interface DeviceLocationUiState {
+    data object Idle : DeviceLocationUiState
+
+    data object Locating : DeviceLocationUiState
+
+    data class PermissionDenied(
+        val openSettingsRequired: Boolean,
+    ) : DeviceLocationUiState
+
+    data object LocationDisabled : DeviceLocationUiState
+
+    data object TimedOut : DeviceLocationUiState
+
+    data object Unavailable : DeviceLocationUiState
+
+    data class Preview(
+        val context: NowPlaceContext,
+        val isApproximate: Boolean,
+    ) : DeviceLocationUiState {
+        init {
+            require(context.source == NowPlaceSource.DEVICE)
+        }
     }
 }
 

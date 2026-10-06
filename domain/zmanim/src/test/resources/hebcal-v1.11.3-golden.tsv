@@ -1,0 +1,13 @@
+# Frozen Hebcal.com API observations retrieved 2026-10-06.
+# Source queries and transformation notes: ../../../HEBCAL_GOLDEN_PROVENANCE.md
+# API response data: Copyright Hebcal.com, CC BY 4.0, https://creativecommons.org/licenses/by/4.0/
+# NULL means the Hebcal API returned JSON null. NONE means the request omitted elevation.
+id	date	referenceInstant	latitude	longitude	elevationMeters	zoneId	hebcalSunrise	hebcalChatzot	hebcalSunset	hebcalHebrewYear	hebcalHebrewMonth	hebcalHebrewDay	hebcalAfterSunset	expectedEngineBoundary
+jerusalem-baseline	2026-10-06	2026-10-06T09:00:00Z	31.778	35.235	754	Asia/Jerusalem	2026-10-06T06:31:50+03:00	2026-10-06T12:26:58+03:00	2026-10-06T18:22:06+03:00	5787	Tishrei	25	false	BEFORE_SUNSET
+jerusalem-after-sunset	2026-10-06	2026-10-06T15:27:06Z	31.778	35.235	754	Asia/Jerusalem	2026-10-06T06:31:50+03:00	2026-10-06T12:26:58+03:00	2026-10-06T18:22:06+03:00	5787	Tishrei	26	true	AT_OR_AFTER_SUNSET
+new-york-diaspora	2026-12-01	2026-12-01T15:00:00Z	40.7128	-74.006	10	America/New_York	2026-12-01T07:00:06-05:00	2026-12-01T11:44:59-05:00	2026-12-01T16:29:53-05:00	5787	Kislev	21	false	BEFORE_SUNSET
+new-york-dst-standard	2026-03-07	2026-03-07T15:00:00Z	40.7128	-74.006	10	America/New_York	2026-03-07T06:19:55-05:00	2026-03-07T12:07:17-05:00	2026-03-07T17:54:39-05:00	5786	Adar	18	false	BEFORE_SUNSET
+new-york-dst-daylight	2026-03-08	2026-03-08T15:00:00Z	40.7128	-74.006	10	America/New_York	2026-03-08T07:18:19-04:00	2026-03-08T13:07:02-04:00	2026-03-08T18:55:45-04:00	5786	Adar	19	false	BEFORE_SUNSET
+adar-leap-boundary-before	2024-03-10	2024-03-10T15:42:56Z	31.778	35.235	754	Asia/Jerusalem	2024-03-10T05:50:55+02:00	2024-03-10T11:49:25+02:00	2024-03-10T17:47:56+02:00	5784	Adar I	30	false	BEFORE_SUNSET
+adar-leap-boundary-after	2024-03-10	2024-03-10T15:52:56Z	31.778	35.235	754	Asia/Jerusalem	2024-03-10T05:50:55+02:00	2024-03-10T11:49:25+02:00	2024-03-10T17:47:56+02:00	5784	Adar II	1	true	AT_OR_AFTER_SUNSET
+tromso-polar-day	2026-06-21	2026-06-21T10:00:00Z	69.6492	18.9553	NONE	Europe/Oslo	NULL	NULL	NULL	5786	Tamuz	6	false	UNAVAILABLE_SUNSET

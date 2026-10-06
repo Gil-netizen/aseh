@@ -86,6 +86,12 @@ conversation for [pull request #4](https://github.com/Gil-netizen/aseh/pull/4):
 
 - [ADR-0006: Manual application composition and constructor injection](0006-manual-app-composition.md)
 
+The following proposed record implements the explicit device-location product
+direction recorded in [issue #9](https://github.com/Gil-netizen/aseh/issues/9),
+but remains open for human architecture and privacy approval:
+
+- [ADR-0007: Foreground device location and local calendar calculations](0007-foreground-location-and-local-calendar.md)
+
 The Android module layout remains for the scaffolding ExecPlan. Scaffolding may
 depend on the accepted compatibility set in ADR-0005; a demonstrated
 incompatibility requires a superseding ADR.

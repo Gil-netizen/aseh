@@ -18,6 +18,7 @@ import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.gilnetizen.aseh.core.database.ManualPlaceContext
+import io.github.gilnetizen.aseh.core.database.PlaceContextSource
 
 /**
  * Keeps the active place inspectable and editable from every top-level destination.
@@ -67,7 +68,11 @@ internal fun PlaceContextBar(
         // Keep the user-entered label and the LTR IANA identifier in separate
         // paragraphs so either script can retain its natural bidi ordering.
         Text(
-          text = placeContext.label,
+          text = if (placeContext.source == PlaceContextSource.DEVICE) {
+            stringResource(R.string.app_place_context_device_label)
+          } else {
+            placeContext.label
+          },
           style = MaterialTheme.typography.bodyMedium.merge(
             TextStyle(textDirection = TextDirection.ContentOrLtr),
           ),

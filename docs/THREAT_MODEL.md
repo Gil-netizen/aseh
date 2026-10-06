@@ -1,7 +1,8 @@
 # ASEH Threat Model
 
-**Status:** Approved\
-**Approved by:** Gil on 2026-10-06 in [pull request #2](https://github.com/Gil-netizen/aseh/pull/2)\
+**Status:** Approved baseline; device-location amendment under review\
+**Baseline approved by:** Gil on 2026-10-06 in [pull request #2](https://github.com/Gil-netizen/aseh/pull/2)\
+**Current amendment:** Foreground device-location additions are under review in [pull request #10](https://github.com/Gil-netizen/aseh/pull/10)\
 **Method:** Asset and trust-boundary review with misuse cases\
 **Review when:** A provider, pack format, deep link, export, sync service, permission, cryptographic design, or release path changes
 
@@ -79,6 +80,7 @@ Source passages, imported notes, pack metadata, provider responses, deep-link pa
 | Supply-chain or CI compromise | Pinned toolchain and dependencies, lockfiles and verification metadata, minimal CI permissions, secret/code/dependency scanning, SBOM, provenance, protected release environment | Clean-clone build, dependency verification, scan reports, provenance verification |
 | App or pack signing-key compromise | Separate project app-signing, upload, and pack-signing keys; protected access; encrypted offline backup; rotation/revocation runbook | Signing dry run, certificate fingerprint check, recovery drill, signer allowlist test |
 | Coercive or misleading defaults | Visible source layer and editorial status, dissent and alternatives, reversible adoption, no content pack may silently change personal settings | Content review confirms labels, reversal path, and absence of hidden adoption |
+| Location collection or inference beyond the requested task | User-initiated one-shot foreground request with bounded provider fallback; approximate access accepted; no background permission, location service, geocoder, IP lookup, analytics, or transmission; confirm before persistence; clear/change controls; no calendar-profile inference; ignore ellipsoid altitude and store only explicit MSL elevation | Manifest gate; provider order, fallback, cancellation, and MSL tests; injected permission/error UI states; focused API 26/API 37 airplane-mode framework-location tests; real API 37 permission-allow and persisted-restart walkthrough; DataStore inspection and network/dependency scan |
 
 ## Connected-AI boundary
 

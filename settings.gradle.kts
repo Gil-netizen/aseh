@@ -22,6 +22,7 @@ include(
   ":core:designsystem",
   ":core:testing",
   ":core:ui",
+  ":domain:zmanim",
   ":feature:build",
   ":feature:now",
   ":feature:practice",

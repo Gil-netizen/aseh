@@ -1,0 +1,15 @@
+KosherJava Zmanim API 2.5.0
+Copyright (C) 2004-2023 Eliyahu Hershfeld
+
+Licensed under the GNU Lesser General Public License, version 2.1 or (at your
+option) any later version. See LICENSE-LGPL-2.1.txt in this directory.
+
+Upstream source for the exact pinned version:
+https://github.com/KosherJava/zmanim/tree/2.5.0
+
+Corresponding Maven Central source archive:
+https://repo.maven.apache.org/maven2/com/kosherjava/zmanim/2.5.0/zmanim-2.5.0-sources.jar
+SHA-256: 419890f11b4daa5d0ca65ebc338d1d18d67935c5b10f2d08a9aff17dba4a7e44
+
+Maven coordinate:
+com.kosherjava:zmanim:2.5.0

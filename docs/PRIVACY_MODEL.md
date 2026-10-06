@@ -1,7 +1,8 @@
 # ASEH Privacy Model
 
-**Status:** Approved\
-**Approved by:** Gil on 2026-10-06 in [pull request #2](https://github.com/Gil-netizen/aseh/pull/2)\
+**Status:** Approved baseline; device-location amendment under review\
+**Baseline approved by:** Gil on 2026-10-06 in [pull request #2](https://github.com/Gil-netizen/aseh/pull/2)\
+**Current amendment:** Foreground device-location additions are under review in [pull request #10](https://github.com/Gil-netizen/aseh/pull/10)\
 **Applies to:** The Android app, ASEH-authored content packs, exports, and optional connected AI\
 **Review when:** A new data type, provider, permission, account system, synchronization feature, or telemetry system is proposed
 
@@ -19,7 +20,7 @@ Privacy is part of religious and civic safety. A convenient default must never e
 |---|---|---|---|
 | Public corpus data | Editions, citations, practice cards, liturgy, pack metadata | Signed, read-only pack storage | The user downloads an update or opens an external source link |
 | App preferences | Language, theme, accessibility, selected practice profile | Local preferences storage | The user includes them in an explicit export |
-| Time and place context | Civil/Hebrew date, coarse or precise location, elevation | Calculated locally; persist only what the user chooses | The user deliberately shares an export or provider request containing it |
+| Time and place context | Civil/Hebrew date, coarse or precise location, optional mean-sea-level elevation | Calculated locally; persist only what the user chooses | The user deliberately shares an export or provider request containing it |
 | Personal and household records | Checklists, adopted practices, review dates, charters | Local operational database | The user previews and confirms an export |
 | Sensitive case records | Medical, fertility, pregnancy, marriage, divorce, conversion, vows, abuse, death, burial, accusations, monetary disputes | Encrypted local sensitive-record store | The user creates an encrypted case packet or explicitly sends selected context to a provider |
 | Community operational records | Roles, schedules, public procedures, and non-sensitive adopted decisions | Local operational database in the alpha | A user with authority creates a reviewed export |
@@ -30,6 +31,29 @@ Privacy is part of religious and civic safety. A convenient default must never e
 | Diagnostics | Local error details and release/build metadata | Local and minimized | The user explicitly exports a diagnostic bundle after preview |
 
 The alpha does not collect behavioral analytics, advertising identifiers, contacts, call history, unrelated files, or background location. A future feature that needs a new Android permission requires a privacy review and a documented, just-in-time explanation before implementation.
+
+### Foreground device location review
+
+Issue #9 permits a foreground-only, user-initiated device-location action for
+local Hebrew-date and solar calculations. Before Android's permission dialog,
+ASEH explains that it requests one current fix, sends nothing away, does not run
+in the background, and saves nothing until the user confirms the candidate.
+
+The app declares coarse and fine foreground location so Android can offer
+approximate or precise access. It accepts approximate access, does not repeatedly
+request an upgrade, and remains usable after denial. It declares no background
+location or location foreground service. It uses no geocoder, map SDK, IP lookup,
+analytics, or network request. The confirmation view shows accuracy when Android
+provides it and the device time zone; coordinates are available under technical
+details and can be changed or cleared. A location fix never silently selects a
+city, time zone, Israel/diaspora profile, practice profile, or community.
+
+Acquisition may fall back between enabled Android framework providers within one
+bounded request: network then GPS for coarse access, and GPS then network for fine
+access. This does not grant the app Internet access or transmit the fix. Elevation
+is minimized and datum-safe: the app ignores ordinary ellipsoid-relative altitude,
+stores only an API 34+ MSL value when Android explicitly supplies one, and otherwise
+stores no elevation and discloses the sea-level calculation fallback.
 
 ## Optional connected AI
 

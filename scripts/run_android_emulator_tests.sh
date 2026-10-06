@@ -365,6 +365,20 @@ capture_android_diagnostics() {
     >"${output_dir}/runner-metadata.txt"
 }
 
+api37_mock_provider_installed=false
+
+cleanup_location_test_provider() {
+  if [[ "${api37_mock_provider_installed}" != "true" ]]; then
+    return 0
+  fi
+
+  adb_with_timeout 5s shell cmd location providers remove-test-provider gps \
+    >/dev/null 2>&1 || true
+  adb_with_timeout 5s shell appops set 2000 android:mock_location default \
+    >/dev/null 2>&1 || true
+  api37_mock_provider_installed=false
+}
+
 capture_on_failure() {
   local exit_code=$?
   trap - EXIT
@@ -372,6 +386,7 @@ capture_on_failure() {
     set +e
     capture_android_diagnostics "script-failure" "${exit_code}"
   fi
+  cleanup_location_test_provider
   exit "${exit_code}"
 }
 trap capture_on_failure EXIT
@@ -470,12 +485,38 @@ fi
 # The launch smoke test deliberately leaves the debug app installed. Remove
 # that exact package so a repeated local run starts from the same state as CI.
 wait_for_android_services
-adb uninstall io.github.gilnetizen.aseh.dev.debug >/dev/null 2>&1 || true
+for stale_test_package in \
+  io.github.gilnetizen.aseh.dev.debug \
+  io.github.gilnetizen.aseh.dev.debug.test \
+  androidx.test.services; do
+  adb uninstall "${stale_test_package}" >/dev/null 2>&1 || true
+done
+
+# Seed a fresh deterministic foreground GPS fix for the real framework-client
+# instrumentation test. API 37 does not retain an emulator-console fix when no
+# listener is active, so its test refreshes a shell-owned mock GPS provider
+# immediately before acquisition. Older images retain `adb emu geo fix`.
+android_sdk="$(adb shell getprop ro.build.version.sdk | tr -d '\r')"
+if [[ "${android_sdk}" == "37" ]]; then
+  assert_pinned_api_37_image "GPS test-provider setup"
+  adb shell appops set 2000 android:mock_location allow
+  adb shell cmd location providers remove-test-provider gps >/dev/null 2>&1 || true
+  adb shell cmd location providers add-test-provider gps \
+    --requiresSatellite --supportsAltitude
+  api37_mock_provider_installed=true
+  adb shell cmd location providers set-test-provider-enabled gps true
+  adb shell cmd location providers set-test-provider-location gps \
+    --location 31.778,35.235 --accuracy 5
+elif ! adb emu geo fix 35.235 31.778 | tr -d '\r' | grep -Fq 'OK'; then
+  echo "Unable to seed the required emulator GPS fix." >&2
+  exit 1
+fi
 
 run_connected_suite :app:connectedDevDebugAndroidTest
 
 assert_connected_test_success() {
   local module_directory="$1"
+  local result_file
   mapfile -t exit_code_files < <(
     find "${module_directory}/build/outputs/androidTest-results" \
       -type f -name 'test-result-exit-code.txt' -print 2>/dev/null
@@ -487,6 +528,23 @@ assert_connected_test_success() {
   for exit_code_file in "${exit_code_files[@]}"; do
     if ! grep -Fqx '0' "${exit_code_file}"; then
       echo "Connected tests failed according to ${exit_code_file}." >&2
+      exit 1
+    fi
+  done
+
+  mapfile -t result_files < <(
+    find "${module_directory}/build/outputs/androidTest-results" \
+      -type f -name 'TEST-*.xml' -print 2>/dev/null
+  )
+  if [[ "${#result_files[@]}" -eq 0 ]]; then
+    echo "No connected-test XML result was produced for ${module_directory}." >&2
+    exit 1
+  fi
+  for result_file in "${result_files[@]}"; do
+    if ! grep -Eq \
+      '<testsuites tests="[1-9][0-9]*" failures="0" errors="0"' \
+      "${result_file}"; then
+      echo "Connected tests were empty or unsuccessful according to ${result_file}." >&2
       exit 1
     fi
   done
