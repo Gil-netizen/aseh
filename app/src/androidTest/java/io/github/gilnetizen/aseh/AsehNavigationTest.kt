@@ -1,5 +1,6 @@
 package io.github.gilnetizen.aseh
 
+import android.content.Intent
 import android.graphics.Bitmap
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.ui.graphics.asAndroidBitmap
@@ -11,13 +12,14 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.captureToImage
-import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.junit4.v2.AndroidComposeTestRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.core.os.LocaleListCompat
 import androidx.compose.ui.unit.dp
+import androidx.test.ext.junit.rules.ActivityScenarioRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.platform.io.PlatformTestStorageRegistry
@@ -34,8 +36,22 @@ import kotlinx.coroutines.withTimeout
 
 @RunWith(AndroidJUnit4::class)
 class AsehNavigationTest {
+  private val activityRule = ActivityScenarioRule<MainActivity>(
+    Intent(
+      InstrumentationRegistry.getInstrumentation().targetContext,
+      MainActivity::class.java,
+    ).apply {
+      action = Intent.ACTION_MAIN
+      addCategory(Intent.CATEGORY_LAUNCHER)
+    },
+  )
+
   @get:Rule
-  val composeRule = createAndroidComposeRule<MainActivity>()
+  val composeRule = AndroidComposeTestRule(activityRule) { rule ->
+    lateinit var activity: MainActivity
+    rule.scenario.onActivity { activity = it }
+    activity
+  }
 
   @Before
   fun resetSelectedDestination() {
