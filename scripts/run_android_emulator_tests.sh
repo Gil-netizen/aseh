@@ -19,16 +19,30 @@ mkdir -p "$(dirname "${sdk_inventory}")"
 
 android_services_ready() {
   local activity_output
+  local android_sdk
   local boot_completed
   local package_output
   local package_service_output
+  local user_ce_available
+  local user_state_output
 
+  android_sdk="$(adb shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r' || true)"
   boot_completed="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
+  user_ce_available="$(adb shell getprop sys.user.0.ce_available 2>/dev/null | tr -d '\r' || true)"
+  user_state_output="$(adb shell am get-started-user-state 0 2>/dev/null | tr -d '\r' || true)"
   package_output="$(adb shell cmd package list packages 2>/dev/null | tr -d '\r' || true)"
   activity_output="$(adb shell service check activity 2>/dev/null | tr -d '\r' || true)"
   package_service_output="$(adb shell service check package 2>/dev/null | tr -d '\r' || true)"
 
+  [[ "${android_sdk}" =~ ^[0-9]+$ ]] || return 1
+  # The pinned API 26 image does not expose the CE property; the user-state
+  # command is the cross-version signal that credential storage is usable.
+  if (( 10#${android_sdk} >= 27 )) && [[ "${user_ce_available}" != "true" ]]; then
+    return 1
+  fi
+
   [[ "${boot_completed}" == "1" ]] \
+    && [[ "${user_state_output}" == "RUNNING_UNLOCKED" ]] \
     && grep -q '^package:' <<<"${package_output}" \
     && grep -Eq '^Service activity: found[[:space:]]*$' <<<"${activity_output}" \
     && grep -Eq '^Service package: found[[:space:]]*$' <<<"${package_service_output}"
@@ -47,7 +61,7 @@ wait_for_android_services() {
     fi
     sleep 2
   done
-  echo "Android's boot, activity, and package services were not stable within 60 seconds." >&2
+  echo "Android's boot, user credential storage, activity, and package services were not stable within 60 seconds." >&2
   return 1
 }
 
@@ -86,6 +100,7 @@ capture_android_diagnostics() {
   adb shell service list >"${output_dir}/services.txt" 2>&1 || true
   adb shell service check activity >"${output_dir}/activity-service.txt" 2>&1 || true
   adb shell service check package >"${output_dir}/package-service.txt" 2>&1 || true
+  adb shell am get-started-user-state 0 >"${output_dir}/user-0-state.txt" 2>&1 || true
   adb shell cmd overlay list >"${output_dir}/navigation-overlays.txt" 2>&1 || true
   adb shell cat /proc/meminfo >"${output_dir}/meminfo.txt" 2>&1 || true
   adb shell df -k >"${output_dir}/filesystems.txt" 2>&1 || true
