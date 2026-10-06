@@ -28,9 +28,18 @@ jobs:
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
-          java-version: '17.0.20.1+1'
+          # setup-java's exact SemVer for OpenJDK 17.0.20.1+1.
+          java-version: '17.0.20+101'
           check-latest: false
           verify-signature: true
+
+      - name: Verify exact Temurin release
+        shell: bash
+        run: |
+          set -euo pipefail
+          java_settings="$(java -XshowSettings:properties -version 2>&1)"
+          grep -Eq '^[[:space:]]*java\.runtime\.version = 17\.0\.20\.1\+1[[:space:]]*$' <<< "${java_settings}"
+          grep -Eq '^[[:space:]]*java\.vendor = Eclipse Adoptium[[:space:]]*$' <<< "${java_settings}"
 
       - name: Set up Android command-line tools 22.0
         uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
@@ -180,9 +189,18 @@ jobs:
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
-          java-version: '17.0.20.1+1'
+          # setup-java's exact SemVer for OpenJDK 17.0.20.1+1.
+          java-version: '17.0.20+101'
           check-latest: false
           verify-signature: true
+
+      - name: Verify exact Temurin release
+        shell: bash
+        run: |
+          set -euo pipefail
+          java_settings="$(java -XshowSettings:properties -version 2>&1)"
+          grep -Eq '^[[:space:]]*java\.runtime\.version = 17\.0\.20\.1\+1[[:space:]]*$' <<< "${java_settings}"
+          grep -Eq '^[[:space:]]*java\.vendor = Eclipse Adoptium[[:space:]]*$' <<< "${java_settings}"
 
       - name: Install Android SDK and fixed emulator image
         uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4

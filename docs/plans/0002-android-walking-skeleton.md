@@ -223,6 +223,7 @@ pass on each fixed runner and emit English-LTR/Hebrew-locale RTL PNG evidence.
 | 2026-10-06 | Git Bash does not discover `sdkmanager.bat` and rewrites `/sdcard` arguments passed to native `adb.exe` | The first final Windows runner invocation could not find `sdkmanager`; the next converted the hierarchy pull path | Resolve Windows SDK executable suffixes and disable MSYS argument conversion without changing the Linux path. |
 | 2026-10-06 | The launcher smoke step leaves the dev APK installed and the Android test engine can report a successful Gradle task when its replacement install fails | A repeated API 26 run emitted `INSTALL_FAILED_ALREADY_EXISTS` and produced no required screenshots | Uninstall the exact dev application before instrumentation and retain the fail-closed screenshot requirement. |
 | 2026-10-06 | Strict dependency locks and `failOnNonReproducibleResolution()` are mutually exclusive in Gradle 9.6 | The first strict build failed before resolution | Keep strict locks and the catalog selector gate; remove the conflicting resolution strategy. |
+| 2026-10-06 | `actions/setup-java` accepts the four-component OpenJDK release `17.0.20.1+1` as Adoptium SemVer `17.0.20+101` | The first GitHub build failed before setup because the OpenJDK spelling is not valid SemVer; Adoptium's release API reports both forms | Request the exact SemVer and fail CI unless the installed runtime still reports `17.0.20.1+1` from Eclipse Adoptium. |
 
 ## Verification and acceptance
 
