@@ -17,78 +17,6 @@ system_image_revision="${ASEH_SYSTEM_IMAGE_REVISION:?ASEH_SYSTEM_IMAGE_REVISION 
 sdk_inventory="build/reports/android-sdk/installed-post-runner-${emulator_label}.txt"
 mkdir -p "$(dirname "${sdk_inventory}")"
 
-sdkmanager_path="$(command -v sdkmanager 2>/dev/null || true)"
-if [[ -z "${sdkmanager_path}" ]]; then
-  sdkmanager_path="${ANDROID_HOME:?ANDROID_HOME must be set}/cmdline-tools/latest/bin/sdkmanager.bat"
-fi
-if [[ ! -f "${sdkmanager_path}" ]]; then
-  echo "Android SDK Manager is missing: ${sdkmanager_path}" >&2
-  exit 1
-fi
-"${sdkmanager_path}" --list_installed >"${sdk_inventory}"
-
-require_sdk_revision() {
-  local package_name="$1"
-  local revision="$2"
-  if ! awk -F '|' -v package_name="${package_name}" -v revision="${revision}" '
-    {
-      gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1)
-      gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2)
-      if ($1 == package_name && $2 == revision) found = 1
-    }
-    END { exit(found ? 0 : 1) }
-  ' "${sdk_inventory}"; then
-    echo "Required SDK package ${package_name} revision ${revision} is not installed." >&2
-    exit 1
-  fi
-}
-
-require_sdk_revision "platform-tools" "37.0.1"
-require_sdk_revision "build-tools;37.0.0" "37.0.0"
-require_sdk_revision "platforms;android-37.0" "2"
-require_sdk_revision "${system_image}" "${system_image_revision}"
-
-capture_android_diagnostics() {
-  local reason="$1"
-  local exit_code="$2"
-  local output_dir="${diagnostic_dir}/${reason}"
-  mkdir -p "${output_dir}"
-
-  adb get-state >"${output_dir}/adb-state.txt" 2>&1 || true
-  adb shell getprop >"${output_dir}/properties.txt" 2>&1 || true
-  adb shell service list >"${output_dir}/services.txt" 2>&1 || true
-  adb shell service check activity >"${output_dir}/activity-service.txt" 2>&1 || true
-  adb shell service check package >"${output_dir}/package-service.txt" 2>&1 || true
-  adb shell cat /proc/meminfo >"${output_dir}/meminfo.txt" 2>&1 || true
-  adb shell df -k >"${output_dir}/filesystems.txt" 2>&1 || true
-  adb shell ps -A >"${output_dir}/processes.txt" 2>&1 || true
-  adb shell dumpsys activity activities >"${output_dir}/activities.txt" 2>&1 || true
-  adb shell ls -la /data/tombstones >"${output_dir}/tombstones.txt" 2>&1 || true
-  adb logcat -d -v threadtime >"${output_dir}/logcat.txt" 2>&1 || true
-  printf 'emulator_label=%s\nexit_code=%s\ngpu_mode=%s\n' \
-    "${emulator_label}" "${exit_code}" "${ASEH_GPU_MODE:-unknown}" \
-    >"${output_dir}/runner-metadata.txt"
-}
-
-capture_on_failure() {
-  local exit_code=$?
-  trap - EXIT
-  if (( exit_code != 0 )); then
-    set +e
-    capture_android_diagnostics "script-failure" "${exit_code}"
-  fi
-  exit "${exit_code}"
-}
-trap capture_on_failure EXIT
-
-data_partition_report="build/reports/android-sdk/data-partition-${emulator_label}.txt"
-adb shell df -k /data | tr -d '\r' | tee "${data_partition_report}"
-data_available_kb="$(awk 'NR > 1 { print $(NF - 2); exit }' "${data_partition_report}")"
-if [[ ! "${data_available_kb}" =~ ^[0-9]+$ ]] || (( data_available_kb < 2097152 )); then
-  echo "The emulator must provide at least 2 GiB free on /data; found ${data_available_kb:-unknown} KiB." >&2
-  exit 1
-fi
-
 android_services_ready() {
   local activity_output
   local boot_completed
@@ -122,6 +50,107 @@ wait_for_android_services() {
   echo "Android's boot, activity, and package services were not stable within 60 seconds." >&2
   return 1
 }
+
+configure_navigation_mode() {
+  local navigation_mode="${ASEH_NAVIGATION_MODE:-default}"
+  local overlay_inventory="${diagnostic_dir}/navigation-overlays.txt"
+
+  if [[ "${navigation_mode}" == "default" ]]; then
+    return 0
+  fi
+
+  local overlay_package="com.android.internal.systemui.navbar.${navigation_mode}"
+  adb shell cmd overlay list 2>/dev/null | tr -d '\r' >"${overlay_inventory}"
+  if ! grep -Fq "${overlay_package}" "${overlay_inventory}"; then
+    echo "Required navigation overlay ${overlay_package} is unavailable." >&2
+    return 1
+  fi
+
+  adb shell cmd overlay enable-exclusive "${overlay_package}" >/dev/null
+  wait_for_android_services
+  adb shell cmd overlay list 2>/dev/null | tr -d '\r' >"${overlay_inventory}"
+  if ! grep -Fq "[x] ${overlay_package}" "${overlay_inventory}"; then
+    echo "Navigation overlay ${overlay_package} did not become active." >&2
+    return 1
+  fi
+}
+
+capture_android_diagnostics() {
+  local reason="$1"
+  local exit_code="$2"
+  local output_dir="${diagnostic_dir}/${reason}"
+  mkdir -p "${output_dir}"
+
+  adb get-state >"${output_dir}/adb-state.txt" 2>&1 || true
+  adb shell getprop >"${output_dir}/properties.txt" 2>&1 || true
+  adb shell service list >"${output_dir}/services.txt" 2>&1 || true
+  adb shell service check activity >"${output_dir}/activity-service.txt" 2>&1 || true
+  adb shell service check package >"${output_dir}/package-service.txt" 2>&1 || true
+  adb shell cmd overlay list >"${output_dir}/navigation-overlays.txt" 2>&1 || true
+  adb shell cat /proc/meminfo >"${output_dir}/meminfo.txt" 2>&1 || true
+  adb shell df -k >"${output_dir}/filesystems.txt" 2>&1 || true
+  adb shell ps -A >"${output_dir}/processes.txt" 2>&1 || true
+  adb shell dumpsys activity activities >"${output_dir}/activities.txt" 2>&1 || true
+  adb shell ls -la /data/tombstones >"${output_dir}/tombstones.txt" 2>&1 || true
+  adb logcat -b all -d -v threadtime >"${output_dir}/logcat.txt" 2>&1 || true
+  printf 'emulator_label=%s\nexit_code=%s\ngpu_mode=%s\nnavigation_mode=%s\n' \
+    "${emulator_label}" "${exit_code}" "${ASEH_GPU_MODE:-unknown}" \
+    "${ASEH_NAVIGATION_MODE:-default}" \
+    >"${output_dir}/runner-metadata.txt"
+}
+
+capture_on_failure() {
+  local exit_code=$?
+  trap - EXIT
+  if (( exit_code != 0 )); then
+    set +e
+    capture_android_diagnostics "script-failure" "${exit_code}"
+  fi
+  exit "${exit_code}"
+}
+trap capture_on_failure EXIT
+
+wait_for_android_services
+configure_navigation_mode
+
+sdkmanager_path="$(command -v sdkmanager 2>/dev/null || true)"
+if [[ -z "${sdkmanager_path}" ]]; then
+  sdkmanager_path="${ANDROID_HOME:?ANDROID_HOME must be set}/cmdline-tools/latest/bin/sdkmanager.bat"
+fi
+if [[ ! -f "${sdkmanager_path}" ]]; then
+  echo "Android SDK Manager is missing: ${sdkmanager_path}" >&2
+  exit 1
+fi
+"${sdkmanager_path}" --list_installed >"${sdk_inventory}"
+
+require_sdk_revision() {
+  local package_name="$1"
+  local revision="$2"
+  if ! awk -F '|' -v package_name="${package_name}" -v revision="${revision}" '
+    {
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2)
+      if ($1 == package_name && $2 == revision) found = 1
+    }
+    END { exit(found ? 0 : 1) }
+  ' "${sdk_inventory}"; then
+    echo "Required SDK package ${package_name} revision ${revision} is not installed." >&2
+    exit 1
+  fi
+}
+
+require_sdk_revision "platform-tools" "37.0.1"
+require_sdk_revision "build-tools;37.0.0" "37.0.0"
+require_sdk_revision "platforms;android-37.0" "2"
+require_sdk_revision "${system_image}" "${system_image_revision}"
+
+data_partition_report="build/reports/android-sdk/data-partition-${emulator_label}.txt"
+adb shell df -k /data | tr -d '\r' | tee "${data_partition_report}"
+data_available_kb="$(awk 'NR > 1 { print $(NF - 2); exit }' "${data_partition_report}")"
+if [[ ! "${data_available_kb}" =~ ^[0-9]+$ ]] || (( data_available_kb < 2097152 )); then
+  echo "The emulator must provide at least 2 GiB free on /data; found ${data_available_kb:-unknown} KiB." >&2
+  exit 1
+fi
 
 run_connected_suite() {
   local task="$1"
@@ -268,7 +297,8 @@ else
   echo "UI Automator hierarchy capture was unavailable; the PNG evidence was retained." >&2
 fi
 
-printf 'application_id=%s\napk=%s\nfont_scale=%s\ngpu_mode=%s\n' \
+printf 'application_id=%s\napk=%s\nfont_scale=%s\ngpu_mode=%s\nnavigation_mode=%s\n' \
   "${application_id}" "${apk_path}" "${font_scale}" "${ASEH_GPU_MODE:-unknown}" \
+  "${ASEH_NAVIGATION_MODE:-default}" \
   >"${artifact_dir}/launch-metadata.txt"
 echo "Instrumentation and offline launcher smoke test passed on ${emulator_label}."

@@ -173,6 +173,7 @@ jobs:
             system-image-revision: '16'
             profile: pixel_2
             gpu-mode: swiftshader_indirect
+            navigation-mode: default
             font-scale: '1.0'
           - label: api-37-0
             api-level: '37.0'
@@ -183,6 +184,9 @@ jobs:
             # The emulator 37 renderer crashes SurfaceFlinger in
             # swiftshader_indirect; software mode is the supported fallback.
             gpu-mode: software
+            # The API 37 image's gestural RegionSampling path crashes
+            # mapper.ranchu; three-button mode removes that system trigger.
+            navigation-mode: threebutton
             font-scale: '2.0'
 
     steps:
@@ -275,6 +279,7 @@ jobs:
           script: >-
             ASEH_FONT_SCALE="${{ matrix.font-scale }}"
             ASEH_GPU_MODE="${{ matrix.gpu-mode }}"
+            ASEH_NAVIGATION_MODE="${{ matrix.navigation-mode }}"
             ASEH_SYSTEM_IMAGE="${{ matrix.system-image }}"
             ASEH_SYSTEM_IMAGE_REVISION="${{ matrix.system-image-revision }}"
             bash scripts/run_android_emulator_tests.sh "${{ matrix.label }}"

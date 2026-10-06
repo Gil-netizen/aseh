@@ -23,7 +23,19 @@ ANDROID_ATTRIBUTE = "{http://schemas.android.com/apk/res/android}"
 APP_MANIFEST = Path("app/src/main/AndroidManifest.xml")
 BACKUP_RULES = Path("app/src/main/res/xml/backup_rules.xml")
 DATA_EXTRACTION_RULES = Path("app/src/main/res/xml/data_extraction_rules.xml")
-BACKUP_DOMAINS = frozenset({"root", "file", "database", "sharedpref", "external"})
+BACKUP_DOMAINS = frozenset(
+    {
+        "root",
+        "file",
+        "database",
+        "sharedpref",
+        "external",
+        "device_root",
+        "device_file",
+        "device_database",
+        "device_sharedpref",
+    }
+)
 
 SQLITE_ATTACH = re.compile(
     r"\bATTACH\s+(?:DATABASE\b|[^;\r\n]*\s+AS\b)",

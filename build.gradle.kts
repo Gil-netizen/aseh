@@ -1,3 +1,20 @@
+buildscript {
+  configurations.classpath {
+    // The plugins DSL resolves before project configurations exist, so the
+    // build classpath needs the same security pins as Android Lint below.
+    resolutionStrategy.force(
+      "org.apache.commons:commons-lang3:3.18.0",
+      "org.apache.httpcomponents:httpclient:4.5.14",
+      "org.apache.httpcomponents:httpmime:4.5.14",
+      "org.bouncycastle:bcpkix-jdk18on:1.85",
+      "org.bouncycastle:bcprov-jdk18on:1.85",
+      "org.bouncycastle:bcutil-jdk18on:1.85",
+      "org.bitbucket.b_c:jose4j:0.9.6",
+      "org.jdom:jdom2:2.0.6.1",
+    )
+  }
+}
+
 plugins {
   alias(libs.plugins.android.application) apply false
   alias(libs.plugins.android.library) apply false
@@ -7,7 +24,24 @@ plugins {
   alias(libs.plugins.androidx.room) apply false
 }
 
+val securityPinnedDependencies = arrayOf(
+  "org.apache.commons:commons-lang3:3.18.0",
+  "org.apache.httpcomponents:httpclient:4.5.14",
+  "org.apache.httpcomponents:httpmime:4.5.14",
+  "org.bouncycastle:bcpkix-jdk18on:1.85",
+  "org.bouncycastle:bcprov-jdk18on:1.85",
+  "org.bouncycastle:bcutil-jdk18on:1.85",
+  "org.bitbucket.b_c:jose4j:0.9.6",
+  "org.jdom:jdom2:2.0.6.1",
+)
+
 allprojects {
+  configurations.configureEach {
+    // Android Lint 32.4.1 requests older build-time libraries with known
+    // vulnerabilities. Keep the lint classpath on fixed, compatible releases.
+    resolutionStrategy.force(*securityPinnedDependencies)
+  }
+
   dependencyLocking {
     lockAllConfigurations()
     lockMode.set(org.gradle.api.artifacts.dsl.LockMode.STRICT)

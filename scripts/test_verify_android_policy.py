@@ -227,6 +227,78 @@ dependencies { implementation("example:library:1.2.3") }
                 [finding.reason for finding in findings],
             )
 
+    def test_requires_all_device_protected_storage_backup_exclusions(self) -> None:
+        required_device_domains = {
+            "device_root",
+            "device_file",
+            "device_database",
+            "device_sharedpref",
+        }
+        self.assertTrue(required_device_domains.issubset(policy.BACKUP_DOMAINS))
+
+        for domain in sorted(required_device_domains):
+            with self.subTest(domain=domain), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                self._write_valid_app_policy(root)
+                backup_rules = (
+                    root
+                    / "app"
+                    / "src"
+                    / "main"
+                    / "res"
+                    / "xml"
+                    / "backup_rules.xml"
+                )
+                extraction_rules = (
+                    root
+                    / "app"
+                    / "src"
+                    / "main"
+                    / "res"
+                    / "xml"
+                    / "data_extraction_rules.xml"
+                )
+                missing_exclusion = f'  <exclude domain="{domain}" path="." />\n'
+                nested_missing_exclusion = (
+                    f'    <exclude domain="{domain}" path="." />\n'
+                )
+                self._write(
+                    backup_rules,
+                    backup_rules.read_text(encoding="utf-8").replace(
+                        missing_exclusion,
+                        "",
+                    ),
+                )
+                self._write(
+                    extraction_rules,
+                    extraction_rules.read_text(encoding="utf-8").replace(
+                        nested_missing_exclusion,
+                        "",
+                    ),
+                )
+
+                reasons = {
+                    finding.reason
+                    for finding in policy.run_checks(
+                        root,
+                        require_merged_manifests=False,
+                        dependency_reports=[],
+                    )
+                }
+
+                self.assertIn(
+                    f'backup rules must exclude {domain} path "."',
+                    reasons,
+                )
+                self.assertIn(
+                    f'cloud-backup must exclude {domain} path "."',
+                    reasons,
+                )
+                self.assertIn(
+                    f'device-transfer must exclude {domain} path "."',
+                    reasons,
+                )
+
     def test_rejects_sqlite_attach_only_in_production_source(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
