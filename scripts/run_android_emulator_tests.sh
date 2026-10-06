@@ -89,6 +89,76 @@ configure_navigation_mode() {
   fi
 }
 
+task_snapshot_controller_state() {
+  adb shell dumpsys window 2>/dev/null \
+    | tr -d '\r' \
+    | awk '
+      /mSnapshotEnabled=/ { controller_state = $0; next }
+      /SnapshotCache Task/ && controller_state != "" {
+        sub(/^[[:space:]]+/, "", controller_state)
+        print controller_state
+        exit
+      }
+    '
+}
+
+assert_task_snapshot_mode() {
+  local task_snapshot_mode="${ASEH_TASK_SNAPSHOT_MODE:-default}"
+  if [[ "${task_snapshot_mode}" == "default" ]]; then
+    return 0
+  fi
+
+  local controller_state
+  controller_state="$(task_snapshot_controller_state || true)"
+  printf '%s\n' "${controller_state}" >"${diagnostic_dir}/task-snapshot-controller.txt"
+  if [[ "${controller_state}" != "mSnapshotEnabled=false" ]]; then
+    echo "Android task snapshots are not disabled; found ${controller_state:-no controller state}." >&2
+    return 1
+  fi
+}
+
+configure_task_snapshot_mode() {
+  local task_snapshot_mode="${ASEH_TASK_SNAPSHOT_MODE:-default}"
+  case "${task_snapshot_mode}" in
+    default)
+      return 0
+      ;;
+    disabled)
+      ;;
+    *)
+      echo "Unsupported task snapshot mode: ${task_snapshot_mode}." >&2
+      return 1
+      ;;
+  esac
+
+  local android_build_id
+  local android_incremental
+  local android_sdk
+  android_build_id="$(adb shell getprop ro.build.id 2>/dev/null | tr -d '\r' || true)"
+  android_incremental="$(adb shell getprop ro.build.version.incremental 2>/dev/null | tr -d '\r' || true)"
+  android_sdk="$(adb shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r' || true)"
+  if [[ "${android_sdk}" != "37" \
+    || "${android_build_id}" != "CE2A.260420.019" \
+    || "${android_incremental}" != "15611780" \
+    || "${system_image}" != "system-images;android-37.0;google_apis;x86_64" \
+    || "${system_image_revision}" != "6" ]]; then
+    echo "Task snapshot suppression is validated only for pinned API 37 image revision 6 (CE2A.260420.019/15611780)." >&2
+    return 1
+  fi
+
+  # Android 17 exposes no named wm shell command for this control. On the
+  # exact image above, IWindowManager transaction 137 is
+  # setTaskSnapshotEnabled(boolean). Disabling it bypasses capture and the
+  # failing asynchronous persistence path without changing app behavior.
+  if ! adb shell service call window 137 i32 0 \
+    >"${diagnostic_dir}/task-snapshot-command.txt" 2>&1; then
+    echo "Unable to disable Android task snapshots on the pinned API 37 image." >&2
+    return 1
+  fi
+  wait_for_android_services
+  assert_task_snapshot_mode
+}
+
 capture_android_diagnostics() {
   local reason="$1"
   local exit_code="$2"
@@ -106,11 +176,12 @@ capture_android_diagnostics() {
   adb shell df -k >"${output_dir}/filesystems.txt" 2>&1 || true
   adb shell ps -A >"${output_dir}/processes.txt" 2>&1 || true
   adb shell dumpsys activity activities >"${output_dir}/activities.txt" 2>&1 || true
+  task_snapshot_controller_state >"${output_dir}/task-snapshot-controller.txt" 2>&1 || true
   adb shell ls -la /data/tombstones >"${output_dir}/tombstones.txt" 2>&1 || true
   adb logcat -b all -d -v threadtime >"${output_dir}/logcat.txt" 2>&1 || true
-  printf 'emulator_label=%s\nexit_code=%s\ngpu_mode=%s\nnavigation_mode=%s\n' \
+  printf 'emulator_label=%s\nexit_code=%s\ngpu_mode=%s\nnavigation_mode=%s\ntask_snapshot_mode=%s\n' \
     "${emulator_label}" "${exit_code}" "${ASEH_GPU_MODE:-unknown}" \
-    "${ASEH_NAVIGATION_MODE:-default}" \
+    "${ASEH_NAVIGATION_MODE:-default}" "${ASEH_TASK_SNAPSHOT_MODE:-default}" \
     >"${output_dir}/runner-metadata.txt"
 }
 
@@ -158,6 +229,7 @@ require_sdk_revision "platform-tools" "37.0.1"
 require_sdk_revision "build-tools;37.0.0" "37.0.0"
 require_sdk_revision "platforms;android-37.0" "2"
 require_sdk_revision "${system_image}" "${system_image_revision}"
+configure_task_snapshot_mode
 
 data_partition_report="build/reports/android-sdk/data-partition-${emulator_label}.txt"
 adb shell df -k /data | tr -d '\r' | tee "${data_partition_report}"
@@ -171,6 +243,7 @@ run_connected_suite() {
   local task="$1"
 
   wait_for_android_services
+  assert_task_snapshot_mode
   ./gradlew \
     --no-daemon \
     --no-parallel \
@@ -178,6 +251,7 @@ run_connected_suite() {
     --dependency-verification strict \
     "${task}"
   wait_for_android_services
+  assert_task_snapshot_mode
 }
 
 font_scale="${ASEH_FONT_SCALE:-1.0}"
@@ -315,8 +389,8 @@ else
   echo "UI Automator hierarchy capture was unavailable; the PNG evidence was retained." >&2
 fi
 
-printf 'application_id=%s\napk=%s\nfont_scale=%s\ngpu_mode=%s\nnavigation_mode=%s\n' \
+printf 'application_id=%s\napk=%s\nfont_scale=%s\ngpu_mode=%s\nnavigation_mode=%s\ntask_snapshot_mode=%s\n' \
   "${application_id}" "${apk_path}" "${font_scale}" "${ASEH_GPU_MODE:-unknown}" \
-  "${ASEH_NAVIGATION_MODE:-default}" \
+  "${ASEH_NAVIGATION_MODE:-default}" "${ASEH_TASK_SNAPSHOT_MODE:-default}" \
   >"${artifact_dir}/launch-metadata.txt"
 echo "Instrumentation and offline launcher smoke test passed on ${emulator_label}."

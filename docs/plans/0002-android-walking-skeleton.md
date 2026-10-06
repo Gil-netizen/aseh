@@ -200,7 +200,8 @@ pass on each fixed runner and emit English-LTR/Hebrew-locale RTL PNG evidence.
 - [x] 2026-10-06 02:56 +03:00 — ADR-0003 backup and persistence-boundary policy checks pass with 14 focused checker tests covering every Android backup domain.
 - [x] 2026-10-06 06:31 +03:00 — [GitHub Android CI run 37407878284](https://github.com/Gil-netizen/aseh/actions/runs/37407878284) passes the build/offline-policy job and both fixed API 26/API 37 instrumentation profiles.
 - [x] 2026-10-06 06:31 +03:00 — [Dependency review run 37407878693](https://github.com/Gil-netizen/aseh/actions/runs/37407878693) accepts the locked Gradle dependency snapshot and passes GitHub's high/critical gate plus the report-only OSV scan.
-- [x] 2026-10-06 06:31 +03:00 — Pull request #4 contains final local and CI evidence and is ready for Gil's accessibility and ADR review.
+- [x] 2026-10-06 06:31 +03:00 — Pull request #4 reached its first complete local and CI evidence point before the later security and runner hardening commits.
+- [x] 2026-10-06 07:56 +03:00 — Diagnosed the later API 37-only failure in [Android CI run 37413794548](https://github.com/Gil-netizen/aseh/actions/runs/37413794548) as Android 17's task-snapshot persister entering a broken `mapper.ranchu` host-buffer read after all app assertions had run; the runner now disables that system path only on the exact revision-checked image and verifies the controller state before and after every connected suite.
 - [ ] Gil accepts or rejects proposed ADR-0006.
 - [ ] Human reviewers complete English/Hebrew visual, TalkBack, keyboard, full process-death, and 200% text review.
 
@@ -232,6 +233,7 @@ pass on each fixed runner and emit English-LTR/Hebrew-locale RTL PNG evidence.
 | 2026-10-06 | The API 37 emulator's gestural `RegionSampling` path aborts SurfaceFlinger in `mapper.ranchu` | CI crash diagnostics showed `SIGABRT` before instrumentation; the same pinned image passes with Android's three-button navigation overlay | Select software rendering and enable the official three-button overlay before the stable-service wait, while retaining fail-closed emulator diagnostics. |
 | 2026-10-06 | API 37 can return success from optional `uiautomator dump` without creating its requested XML file | Run 37409626167 passed both connected suites and captured the offline-launch PNG, then failed while pulling the absent optional hierarchy | Guard the dump and pull as one optional evidence operation and retain their combined diagnostic log without weakening required PNG or process checks. |
 | 2026-10-06 | API 37 can report boot and core services ready while user 0 app storage is still being prepared | Run 37411267767 set `sys.user.0.ce_available=true` at 04:14:55.060 UTC, then failed to create DataStore directories before user 0 reached `RUNNING_UNLOCKED` at 04:15:01.348 UTC | Require user 0 to be `RUNNING_UNLOCKED` on every test API and require `sys.user.0.ce_available=true` on API 27 and later, for three consecutive readiness checks before each connected suite. |
+| 2026-10-06 | Android 17 image revision 6 can abort `system_server` when `TaskSnapshotPersister` converts a real task snapshot through `GoldfishMapper::readFromHost` | Run 37413794548 passed the first three app tests, then tombstoned `system_server` on its task-snapshot persistence thread with the mapper feature assertion; AOSP's Android 17 WindowManager contract and a live exact-image probe confirmed the controller switch | On only the revision-checked API 37 image, call Android 17's `IWindowManager.setTaskSnapshotEnabled(false)` binder transaction before app launch and fail unless the task controller reports `mSnapshotEnabled=false` before and after each suite. |
 | 2026-10-06 | GitHub's generated Automatic Dependency Submission resolves 534 Gradle configurations, including seven transient AGP metadata configurations without lock state | Managed run 37407415864 failed at `debugImplementationDependenciesMetadata`; an audited repository workflow selected 90/90 locked compile/runtime classpaths and submitted its snapshot successfully | Disable the generated job and keep the pinned, repository-owned dependency-submission job. |
 | 2026-10-06 | The only remaining OSV finding is a Moderate build-only advisory in `kotlin-gradle-plugin:2.2.10`; the first fixed release is preview `2.4.20-Beta1` | A hash-stable local scan found zero advisories in 331 locked components and no high, critical, or runtime finding | Report the advisory for owner review and retain the stable toolchain pin until a stable compatible fix exists. |
 
@@ -269,8 +271,11 @@ Room migration; destructive fallback remains disabled.
 ## Residual risks and handoff
 
 - API 37 CI uses software rendering plus the verified three-button navigation
-  overlay to avoid an emulator-host `RegionSampling` crash. The script fails
-  closed and retains diagnostics if the overlay or emulator becomes unstable.
+  overlay to avoid an emulator-host `RegionSampling` crash. On the exact pinned
+  Android 17 image revision, it also disables task snapshot capture and
+  persistence to bypass a separate `TaskSnapshotPersister` mapper crash. The
+  script verifies both system controls and retains diagnostics if the emulator
+  becomes unstable.
 - Automated bounds and semantics assertions do not replace human Hebrew,
   English, TalkBack, keyboard, full process-death, and 200% visual review.
 - Proposed ADR-0006 requires Gil's human review in the implementing PR before
@@ -284,12 +289,14 @@ Room migration; destructive fallback remains disabled.
 
 ## Outcomes
 
-The final strictly verified local suite and all relevant GitHub jobs pass. The
+The strictly verified local suite passes, and commit `48b6657` demonstrated a
+complete green GitHub run before the later security and runner hardening. The
 accepted dependency snapshot covers 90 fully locked compile/runtime classpath
 configurations; GitHub rejects newly introduced high or critical
 vulnerabilities, while OSV reports lower-severity findings for explicit owner
 review. A supplemental audit of 331 locked coordinates found no lockfile or
-runtime findings; the one remaining advisory affects build tooling only.
+runtime findings; the one remaining advisory affects build tooling only. The
+implementing pull request records the final latest-head CI evidence.
 
 This ExecPlan remains Active pending Gil's ADR-0006 decision and the required
 human accessibility review. The scaffold remains unsigned and unpublished; no
