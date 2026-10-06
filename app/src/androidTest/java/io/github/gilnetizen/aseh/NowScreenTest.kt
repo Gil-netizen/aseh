@@ -1,5 +1,7 @@
 package io.github.gilnetizen.aseh
 
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
@@ -10,9 +12,12 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.gilnetizen.aseh.core.designsystem.AsehTheme
+import io.github.gilnetizen.aseh.feature.now.DeviceLocationUiState
 import io.github.gilnetizen.aseh.feature.now.NowPlaceContext
+import io.github.gilnetizen.aseh.feature.now.NowPlaceSource
 import io.github.gilnetizen.aseh.feature.now.NowScreen
 import java.io.IOException
 import java.time.Clock
@@ -193,6 +198,212 @@ class NowScreenTest {
   }
 
   @Test
+  fun deviceLocationIsPrimaryAndManualCoordinateFieldsStayHiddenInitially() {
+    composeRule.setContent {
+      AsehTheme {
+        NowScreen(clock = fixedClock())
+      }
+    }
+
+    openPlaceEditor()
+
+    composeRule.onNodeWithTag("now-use-device-location")
+      .performScrollTo()
+      .assertIsDisplayed()
+    composeRule.onNodeWithTag("now-enter-location-manually")
+      .performScrollTo()
+      .assertIsDisplayed()
+    composeRule.onAllNodesWithTag("now-place-latitude-input").assertCountEquals(0)
+    composeRule.onAllNodesWithTag("now-place-longitude-input").assertCountEquals(0)
+  }
+
+  @Test
+  fun deviceLocationPreviewShowsContextAndSavesTheDeviceFix() {
+    val previewContext = NowPlaceContext(
+      label = "",
+      latitudeDegrees = 31.778,
+      longitudeDegrees = 35.235,
+      elevationMeters = 754.0,
+      timeZoneId = "Asia/Jerusalem",
+      source = NowPlaceSource.DEVICE,
+      horizontalAccuracyMeters = 120.0,
+    )
+    var savedContext: NowPlaceContext? = null
+
+    composeRule.setContent {
+      AsehTheme {
+        NowScreen(
+          clock = fixedClock(),
+          deviceLocationState = DeviceLocationUiState.Preview(
+            context = previewContext,
+            isApproximate = true,
+          ),
+          onSavePlaceContext = { savedContext = it },
+        )
+      }
+    }
+
+    openPlaceEditor()
+    composeRule.onNodeWithTag("now-location-preview-kind")
+      .performScrollTo()
+      .assertTextContains("Approximate location")
+    composeRule.onNodeWithTag("now-location-preview-accuracy")
+      .performScrollTo()
+      .assertTextContains("About 120 meters")
+    composeRule.onNodeWithTag("now-location-preview-time-zone")
+      .performScrollTo()
+      .assertTextContains("Asia/Jerusalem")
+    composeRule.onAllNodesWithTag("now-location-technical-coordinates")
+      .assertCountEquals(0)
+
+    composeRule.onNodeWithTag("now-location-technical-toggle")
+      .performScrollTo()
+      .performClick()
+    composeRule.onNodeWithTag("now-location-technical-coordinates")
+      .performScrollTo()
+      .assertTextContains("31.778", substring = true)
+      .assertTextContains("35.235", substring = true)
+    composeRule.onNodeWithTag("now-location-technical-toggle")
+      .assertTextContains("Hide technical details")
+
+    composeRule.onNodeWithTag("now-use-this-location")
+      .performScrollTo()
+      .performClick()
+
+    composeRule.runOnIdle {
+      assertEquals(previewContext, savedContext)
+      assertEquals(NowPlaceSource.DEVICE, savedContext?.source)
+    }
+    composeRule.onAllNodesWithTag("now-place-editor").assertCountEquals(0)
+  }
+
+  @Test
+  fun savedDeviceLocationKeepsCoordinatesPrivateAndOffersDirectRefresh() {
+    val savedDeviceContext = NowPlaceContext(
+      label = "",
+      latitudeDegrees = 31.778,
+      longitudeDegrees = 35.235,
+      elevationMeters = null,
+      timeZoneId = "Asia/Jerusalem",
+      source = NowPlaceSource.DEVICE,
+      horizontalAccuracyMeters = 20.0,
+    )
+    var refreshCalls = 0
+
+    composeRule.setContent {
+      AsehTheme {
+        NowScreen(
+          clock = fixedClock(),
+          placeContext = savedDeviceContext,
+          onRequestDeviceLocation = { refreshCalls += 1 },
+        )
+      }
+    }
+
+    composeRule.onNodeWithTag("now-location-status")
+      .performScrollTo()
+      .assertTextContains("saved device location", substring = true, ignoreCase = true)
+    composeRule.onNodeWithTag("now-place-name")
+      .performScrollTo()
+      .assertTextContains("Location source")
+      .assertTextContains("Saved device location")
+    composeRule.onAllNodesWithTag("now-place-coordinates").assertCountEquals(0)
+
+    composeRule.onNodeWithTag("now-place-technical-toggle")
+      .performScrollTo()
+      .assertTextContains("Show technical details")
+      .performClick()
+    composeRule.onNodeWithTag("now-place-coordinates")
+      .performScrollTo()
+      .assertTextContains("31.778, 35.235")
+
+    composeRule.onNodeWithTag("now-reacquire-device-location")
+      .performScrollTo()
+      .assertTextContains("Refresh device location")
+      .performClick()
+    composeRule.runOnIdle { assertEquals(1, refreshCalls) }
+    composeRule.onNodeWithTag("now-place-editor")
+      .performScrollTo()
+      .assertIsDisplayed()
+  }
+
+  @Test
+  fun permissionDeniedExposesRetryAndAppSettingsActions() {
+    val locationState = androidx.compose.runtime.mutableStateOf<DeviceLocationUiState>(
+      DeviceLocationUiState.PermissionDenied(openSettingsRequired = false),
+    )
+    var retryCalls = 0
+    var appSettingsCalls = 0
+
+    composeRule.setContent {
+      AsehTheme {
+        NowScreen(
+          clock = fixedClock(),
+          deviceLocationState = locationState.value,
+          onRequestDeviceLocation = { retryCalls += 1 },
+          onOpenAppSettings = { appSettingsCalls += 1 },
+        )
+      }
+    }
+
+    openPlaceEditor()
+    composeRule.onNodeWithTag("now-location-permission-error")
+      .performScrollTo()
+      .assertTextContains("not granted", substring = true, ignoreCase = true)
+    composeRule.onNodeWithTag("now-location-permission-action")
+      .performScrollTo()
+      .assertTextContains("Retry location")
+      .performClick()
+    composeRule.runOnIdle { assertEquals(1, retryCalls) }
+
+    composeRule.runOnIdle {
+      locationState.value = DeviceLocationUiState.PermissionDenied(
+        openSettingsRequired = true,
+      )
+    }
+    composeRule.onNodeWithTag("now-location-permission-action")
+      .performScrollTo()
+      .assertTextContains("Open app settings")
+      .performClick()
+    composeRule.runOnIdle { assertEquals(1, appSettingsCalls) }
+  }
+
+  @Test
+  fun locationDisabledExposesSettingsAndRetryActions() {
+    var locationSettingsCalls = 0
+    var retryCalls = 0
+
+    composeRule.setContent {
+      AsehTheme {
+        NowScreen(
+          clock = fixedClock(),
+          deviceLocationState = DeviceLocationUiState.LocationDisabled,
+          onRequestDeviceLocation = { retryCalls += 1 },
+          onOpenLocationSettings = { locationSettingsCalls += 1 },
+        )
+      }
+    }
+
+    openPlaceEditor()
+    composeRule.onNodeWithTag("now-location-disabled-error")
+      .performScrollTo()
+      .assertTextContains("turned off", substring = true, ignoreCase = true)
+    composeRule.onNodeWithTag("now-open-location-settings")
+      .performScrollTo()
+      .assertTextContains("Open location settings")
+      .performClick()
+    composeRule.onNodeWithTag("now-retry-location")
+      .performScrollTo()
+      .assertTextContains("Retry location")
+      .performClick()
+
+    composeRule.runOnIdle {
+      assertEquals(1, locationSettingsCalls)
+      assertEquals(1, retryCalls)
+    }
+  }
+
+  @Test
   fun failedSaveKeepsTheDraftAndReportsTheDeviceError() {
     var saveAttempts = 0
 
@@ -306,6 +517,87 @@ class NowScreenTest {
   }
 
   @Test
+  fun activePlaceShowsHebrewDateSolarTimesNextEventAndMethod() {
+    val placeContext = NowPlaceContext(
+      label = "Jerusalem",
+      latitudeDegrees = 31.778,
+      longitudeDegrees = 35.235,
+      elevationMeters = 754.0,
+      timeZoneId = "Asia/Jerusalem",
+    )
+
+    composeRule.setContent {
+      AsehTheme {
+        NowScreen(
+          clock = Clock.fixed(
+            Instant.parse("2026-10-06T09:00:00Z"),
+            ZoneId.of("UTC"),
+          ),
+          placeContext = placeContext,
+        )
+      }
+    }
+
+    composeRule.onNodeWithTag("now-hebrew-date")
+      .performScrollTo()
+      .assertTextContains("25 Tishrei", substring = true)
+      .assertTextContains("5787", substring = true)
+    composeRule.onNodeWithTag("now-sunrise")
+      .performScrollTo()
+      .assertTextContains("6:31 AM", substring = true)
+    composeRule.onNodeWithTag("now-solar-noon")
+      .performScrollTo()
+      .assertTextContains("12:27 PM", substring = true)
+    composeRule.onNodeWithTag("now-sunset")
+      .performScrollTo()
+      .assertTextContains("6:22 PM", substring = true)
+    composeRule.onNodeWithTag("now-next-event")
+      .performScrollTo()
+      .assertTextContains("Solar noon / chatzot", substring = true)
+    composeRule.onNodeWithTag("now-calculation-method")
+      .performScrollTo()
+      .assertTextContains("KosherJava 2.5.0", substring = true)
+  }
+
+  @Test
+  fun hebrewDateKeepsLtrAndRtlRunsSeparateInRtlLayout() {
+    val placeContext = NowPlaceContext(
+      label = "Jerusalem",
+      latitudeDegrees = 31.778,
+      longitudeDegrees = 35.235,
+      elevationMeters = 754.0,
+      timeZoneId = "Asia/Jerusalem",
+    )
+
+    composeRule.setContent {
+      CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+        AsehTheme {
+          NowScreen(
+            clock = Clock.fixed(
+              Instant.parse("2026-10-06T09:00:00Z"),
+              ZoneId.of("UTC"),
+            ),
+            placeContext = placeContext,
+          )
+        }
+      }
+    }
+
+    composeRule.onNodeWithTag(
+      "now-hebrew-date-transliterated",
+      useUnmergedTree = true,
+    )
+      .performScrollTo()
+      .assertTextContains("25 Tishrei, 5787")
+    composeRule.onNodeWithTag(
+      "now-hebrew-date-hebrew",
+      useUnmergedTree = true,
+    )
+      .performScrollTo()
+      .assertTextContains("כ״ה תשרי תשפ״ז")
+  }
+
+  @Test
   fun cancelClosesEditorWithoutSaving() {
     var savedContext: NowPlaceContext? = null
 
@@ -352,7 +644,7 @@ class NowScreenTest {
       }
     }
 
-    openManualPlaceEditor("now-change-context")
+    openPlaceEditor("now-change-context")
     composeRule.onNodeWithTag("now-clear-context")
       .performScrollTo()
       .performClick()
@@ -387,6 +679,17 @@ class NowScreenTest {
   }
 
   private fun openManualPlaceEditor(actionTag: String = "now-set-up-place") {
+    openPlaceEditor(actionTag)
+    composeRule.onNodeWithTag("now-enter-location-manually")
+      .performScrollTo()
+      .assertIsDisplayed()
+      .performClick()
+    composeRule.onNodeWithTag("now-place-latitude-input")
+      .performScrollTo()
+      .assertIsDisplayed()
+  }
+
+  private fun openPlaceEditor(actionTag: String = "now-set-up-place") {
     val action = composeRule.onNodeWithTag(actionTag)
     if (actionTag == "now-change-context") {
       action.performScrollTo()
@@ -394,7 +697,9 @@ class NowScreenTest {
     action
       .assertIsDisplayed()
       .performClick()
-    composeRule.onNodeWithTag("now-place-editor").assertIsDisplayed()
+    composeRule.onNodeWithTag("now-place-editor")
+      .performScrollTo()
+      .assertIsDisplayed()
   }
 
   private fun enterText(testTag: String, value: String) {

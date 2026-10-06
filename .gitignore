@@ -1,6 +1,7 @@
 # Gradle and Android
 .gradle/
 .kotlin/
+.codex-remote-attachments/
 build/
 **/build/
 !feature/build/

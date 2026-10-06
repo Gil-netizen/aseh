@@ -15,6 +15,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -45,14 +46,27 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
+import io.github.gilnetizen.aseh.domain.zmanim.ElevationHandling
+import io.github.gilnetizen.aseh.domain.zmanim.HebrewDateCalculation
+import io.github.gilnetizen.aseh.domain.zmanim.KosherJavaZmanimEngine
+import io.github.gilnetizen.aseh.domain.zmanim.ZmanCalculation
+import io.github.gilnetizen.aseh.domain.zmanim.ZmanimEventType
+import io.github.gilnetizen.aseh.domain.zmanim.ZmanimRequest
+import io.github.gilnetizen.aseh.domain.zmanim.ZmanimSnapshot
 import java.math.BigDecimal
 import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 import java.util.Locale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -64,6 +78,12 @@ private val weekdayFormatter: DateTimeFormatter =
 
 private val localTimeFormatter: DateTimeFormatter =
     DateTimeFormatter.ofPattern("HH:mm:ss", Locale.ENGLISH)
+
+private val solarTimeFormatter: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH)
+
+private val nextEventFormatter: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("EEE, MMM d · h:mm a", Locale.ENGLISH)
 
 private val availableTimeZoneIds: List<String> by lazy {
     ZoneId.getAvailableZoneIds().sorted()
@@ -108,11 +128,81 @@ internal class NowScreenState(
     private val clock: Clock,
     private val timeZone: () -> ZoneId = { clock.zone },
 ) {
-    var snapshot by mutableStateOf(currentNowUiState(clock, timeZone))
+    var snapshotInstant by mutableStateOf(clock.instant())
+        private set
+
+    var snapshot by mutableStateOf(formatNowUiState(snapshotInstant, timeZone()))
         private set
 
     fun refresh() {
-        snapshot = currentNowUiState(clock, timeZone)
+        snapshotInstant = clock.instant()
+        snapshot = formatNowUiState(snapshotInstant, timeZone())
+    }
+}
+
+/**
+ * Chooses the first clock boundary that can change content on the Now screen.
+ *
+ * A minute boundary keeps the visible clock current and also covers civil
+ * midnight. A solar event may occur between minute boundaries, so it wins when
+ * it is earlier; this lets the Hebrew date and next event turn over at sunset.
+ */
+internal fun nextNowRefreshInstant(
+    currentInstant: Instant,
+    nextSolarBoundary: Instant?,
+): Instant {
+    val nextMinute = currentInstant.truncatedTo(ChronoUnit.MINUTES).plus(1, ChronoUnit.MINUTES)
+    val solarRefresh = when {
+        nextSolarBoundary == null -> null
+        nextSolarBoundary == currentInstant -> nextSolarBoundary.plusMillis(1)
+        nextSolarBoundary.isAfter(currentInstant) -> nextSolarBoundary
+        else -> null
+    }
+    return solarRefresh?.takeIf { it.isBefore(nextMinute) } ?: nextMinute
+}
+
+internal fun calculateNowZmanimSnapshot(
+    placeContext: NowPlaceContext,
+    instant: Instant,
+    engine: KosherJavaZmanimEngine,
+): ZmanimSnapshot? = runCatching {
+    val zoneId = ZoneId.of(placeContext.timeZoneId)
+    engine.calculate(
+        ZmanimRequest(
+            date = instant.atZone(zoneId).toLocalDate(),
+            referenceInstant = instant,
+            latitude = placeContext.latitudeDegrees,
+            longitude = placeContext.longitudeDegrees,
+            elevationMeters = placeContext.elevationMeters,
+            zoneId = zoneId,
+        ),
+    )
+}.getOrNull()
+
+@Composable
+private fun KeepNowStateFresh(
+    state: NowScreenState,
+    clock: Clock,
+    placeContext: NowPlaceContext?,
+    nextSolarBoundary: Instant?,
+) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    LaunchedEffect(lifecycleOwner, state, placeContext, nextSolarBoundary) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            // Resample immediately after returning from the background; time,
+            // date, zone, and solar boundaries may all have changed.
+            state.refresh()
+            while (true) {
+                val currentInstant = clock.instant()
+                val nextRefresh = nextNowRefreshInstant(currentInstant, nextSolarBoundary)
+                val waitMillis = Duration.between(currentInstant, nextRefresh)
+                    .toMillis()
+                    .coerceAtLeast(1L)
+                delay(waitMillis)
+                state.refresh()
+            }
+        }
     }
 }
 
@@ -124,6 +214,11 @@ fun NowScreen(
     placeContext: NowPlaceContext? = null,
     openEditorRequest: Int = 0,
     onOpenEditorRequestConsumed: () -> Unit = {},
+    deviceLocationState: DeviceLocationUiState = DeviceLocationUiState.Idle,
+    onRequestDeviceLocation: () -> Unit = {},
+    onCancelDeviceLocation: () -> Unit = {},
+    onOpenAppSettings: () -> Unit = {},
+    onOpenLocationSettings: () -> Unit = {},
     onSavePlaceContext: suspend (NowPlaceContext) -> Unit = {},
     onClearPlaceContext: suspend () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -137,6 +232,26 @@ fun NowScreen(
     val state = remember(clock, selectedTimeZone) {
         NowScreenState(clock, selectedTimeZone)
     }
+    val zmanimEngine = remember { KosherJavaZmanimEngine() }
+    val zmanimSnapshot = remember(
+        placeContext,
+        state.snapshotInstant,
+        state.snapshot.timeZone,
+    ) {
+        placeContext?.let { context ->
+            calculateNowZmanimSnapshot(
+                placeContext = context,
+                instant = state.snapshotInstant,
+                engine = zmanimEngine,
+            )
+        }
+    }
+    KeepNowStateFresh(
+        state = state,
+        clock = clock,
+        placeContext = placeContext,
+        nextSolarBoundary = zmanimSnapshot?.nextEvent?.instant,
+    )
     var editingPlace by remember { mutableStateOf(false) }
 
     LaunchedEffect(openEditorRequest, placeContextReady) {
@@ -182,9 +297,14 @@ fun NowScreen(
         )
 
         if (editingPlace) {
-            ManualPlaceEditor(
+            PlaceContextEditor(
                 existingContext = placeContext,
                 defaultTimeZoneId = state.snapshot.timeZone,
+                deviceLocationState = deviceLocationState,
+                onRequestDeviceLocation = onRequestDeviceLocation,
+                onCancelDeviceLocation = onCancelDeviceLocation,
+                onOpenAppSettings = onOpenAppSettings,
+                onOpenLocationSettings = onOpenLocationSettings,
                 onSave = { savedContext ->
                     onSavePlaceContext(savedContext)
                     editingPlace = false
@@ -228,11 +348,26 @@ fun NowScreen(
             testTag = "now-time-zone",
         )
 
+        if (placeContext != null) {
+            ZmanimCard(
+                snapshot = zmanimSnapshot,
+                zoneId = ZoneId.of(placeContext.timeZoneId),
+            )
+        }
+
         if (!editingPlace && placeContext != null) {
             PlaceContextCard(
                 placeContextReady = placeContextReady,
                 placeContext = placeContext,
                 onChange = { editingPlace = true },
+                onRefreshDeviceLocation = if (placeContext.source == NowPlaceSource.DEVICE) {
+                    {
+                        editingPlace = true
+                        onRequestDeviceLocation()
+                    }
+                } else {
+                    null
+                },
             )
         }
 
@@ -249,11 +384,197 @@ fun NowScreen(
 }
 
 @Composable
+private fun ZmanimCard(
+    snapshot: ZmanimSnapshot?,
+    zoneId: ZoneId,
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("now-zmanim-card"),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.primaryContainer,
+        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.feature_now_hebrew_date_heading),
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.semantics { heading() },
+            )
+            when (val hebrewDate = snapshot?.hebrewDate) {
+                is HebrewDateCalculation.Available -> {
+                    HebrewDateValue(
+                        label = stringResource(R.string.feature_now_hebrew_date_label),
+                        transliterated = hebrewDate.date.transliterated,
+                        hebrew = hebrewDate.date.hebrew,
+                    )
+                    Text(
+                        text = stringResource(R.string.feature_now_hebrew_date_boundary),
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.testTag("now-hebrew-date-boundary"),
+                    )
+                }
+                is HebrewDateCalculation.Unavailable -> {
+                    Text(
+                        text = stringResource(R.string.feature_now_hebrew_date_unavailable),
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.testTag("now-hebrew-date-unavailable"),
+                    )
+                }
+                null -> {
+                    Text(
+                        text = stringResource(R.string.feature_now_calculation_unavailable),
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.testTag("now-hebrew-date-unavailable"),
+                    )
+                }
+            }
+
+            Text(
+                text = stringResource(R.string.feature_now_solar_times_heading),
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.semantics { heading() },
+            )
+            SolarTimeValue(
+                label = stringResource(R.string.feature_now_sunrise_label),
+                calculation = snapshot?.sunrise,
+                zoneId = zoneId,
+                testTag = "now-sunrise",
+            )
+            SolarTimeValue(
+                label = stringResource(R.string.feature_now_solar_noon_label),
+                calculation = snapshot?.solarNoonChatzot,
+                zoneId = zoneId,
+                testTag = "now-solar-noon",
+            )
+            SolarTimeValue(
+                label = stringResource(R.string.feature_now_sunset_label),
+                calculation = snapshot?.sunset,
+                zoneId = zoneId,
+                testTag = "now-sunset",
+            )
+
+            NowValue(
+                label = stringResource(R.string.feature_now_next_event_label),
+                value = snapshot?.nextEvent?.let { event ->
+                    val eventName = stringResource(event.type.labelResource())
+                    stringResource(
+                        R.string.feature_now_next_event_value,
+                        eventName,
+                        nextEventFormatter.format(event.instant.atZone(zoneId)),
+                    )
+                } ?: stringResource(R.string.feature_now_solar_time_unavailable),
+                testTag = "now-next-event",
+                forceLtrValue = false,
+            )
+
+            if (snapshot != null) {
+                Text(
+                    text = stringResource(R.string.feature_now_calculation_method_heading),
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.semantics { heading() },
+                )
+                Text(
+                    text = stringResource(
+                        R.string.feature_now_calculation_method,
+                        snapshot.metadata.engineVersion,
+                        snapshot.metadata.algorithmName,
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.testTag("now-calculation-method"),
+                )
+                Text(
+                    text = stringResource(snapshot.metadata.elevationHandling.explanationResource()),
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.testTag("now-calculation-elevation"),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SolarTimeValue(
+    label: String,
+    calculation: ZmanCalculation?,
+    zoneId: ZoneId,
+    testTag: String,
+) {
+    NowValue(
+        label = label,
+        value = if (calculation is ZmanCalculation.Available) {
+            solarTimeFormatter.format(calculation.instant.atZone(zoneId))
+        } else {
+            stringResource(R.string.feature_now_solar_time_unavailable)
+        },
+        testTag = testTag,
+    )
+}
+
+@Composable
+private fun HebrewDateValue(
+    label: String,
+    transliterated: String,
+    hebrew: String,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("now-hebrew-date")
+            .semantics(mergeDescendants = true) {},
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = transliterated,
+            style = MaterialTheme.typography.titleLarge.merge(
+                TextStyle(textDirection = TextDirection.Ltr),
+            ),
+            modifier = Modifier.testTag("now-hebrew-date-transliterated"),
+        )
+        Text(
+            text = hebrew,
+            style = MaterialTheme.typography.titleLarge.merge(
+                TextStyle(textDirection = TextDirection.Rtl),
+            ),
+            modifier = Modifier.testTag("now-hebrew-date-hebrew"),
+        )
+    }
+}
+
+@StringRes
+private fun ZmanimEventType.labelResource(): Int = when (this) {
+    ZmanimEventType.SUNRISE -> R.string.feature_now_sunrise_label
+    ZmanimEventType.SOLAR_NOON_CHATZOT -> R.string.feature_now_solar_noon_label
+    ZmanimEventType.SUNSET -> R.string.feature_now_sunset_label
+}
+
+@StringRes
+private fun ElevationHandling.explanationResource(): Int = when (this) {
+    ElevationHandling.REPORTED_ELEVATION -> R.string.feature_now_elevation_reported_method
+    ElevationHandling.SEA_LEVEL_WHEN_NOT_REPORTED -> R.string.feature_now_elevation_missing_method
+    ElevationHandling.SEA_LEVEL_FOR_BELOW_SEA_LEVEL_LOCATION ->
+        R.string.feature_now_elevation_below_sea_level_method
+}
+
+@Composable
 private fun PlaceContextCard(
     placeContextReady: Boolean,
     placeContext: NowPlaceContext?,
     onChange: () -> Unit,
+    onRefreshDeviceLocation: (() -> Unit)? = null,
 ) {
+    var showTechnicalDetails by remember(placeContext) { mutableStateOf(false) }
+    val isDeviceLocation = placeContext?.source == NowPlaceSource.DEVICE
+
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
@@ -280,6 +601,8 @@ private fun PlaceContextCard(
                             R.string.feature_now_location_loading
                         } else if (placeContext == null) {
                             R.string.feature_now_location_unavailable
+                        } else if (placeContext.source == NowPlaceSource.DEVICE) {
+                            R.string.feature_now_location_device
                         } else {
                             R.string.feature_now_location_manual
                         },
@@ -290,17 +613,48 @@ private fun PlaceContextCard(
 
             if (placeContextReady && placeContext != null) {
                 NowValue(
-                    label = stringResource(R.string.feature_now_place_name_label),
-                    value = placeContext.label,
+                    label = stringResource(
+                        if (isDeviceLocation) {
+                            R.string.feature_now_location_source_label
+                        } else {
+                            R.string.feature_now_place_name_label
+                        },
+                    ),
+                    value = if (isDeviceLocation) {
+                        stringResource(R.string.feature_now_current_location)
+                    } else {
+                        placeContext.label
+                    },
                     testTag = "now-place-name",
                     forceLtrValue = false,
                 )
-                NowValue(
-                    label = stringResource(R.string.feature_now_coordinates_label),
-                    value = "${placeContext.latitudeDegrees.toDisplayNumber()}, " +
-                        placeContext.longitudeDegrees.toDisplayNumber(),
-                    testTag = "now-place-coordinates",
-                )
+                if (isDeviceLocation) {
+                    TextButton(
+                        onClick = { showTechnicalDetails = !showTechnicalDetails },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .testTag("now-place-technical-toggle"),
+                    ) {
+                        Text(
+                            text = stringResource(
+                                if (showTechnicalDetails) {
+                                    R.string.feature_now_hide_technical_details
+                                } else {
+                                    R.string.feature_now_show_technical_details
+                                },
+                            ),
+                        )
+                    }
+                }
+                if (!isDeviceLocation || showTechnicalDetails) {
+                    NowValue(
+                        label = stringResource(R.string.feature_now_coordinates_label),
+                        value = "${placeContext.latitudeDegrees.toDisplayNumber()}, " +
+                            placeContext.longitudeDegrees.toDisplayNumber(),
+                        testTag = "now-place-coordinates",
+                    )
+                }
                 NowValue(
                     label = stringResource(R.string.feature_now_elevation_label),
                     value = placeContext.elevationMeters?.let {
@@ -311,6 +665,16 @@ private fun PlaceContextCard(
                     } ?: stringResource(R.string.feature_now_not_set),
                     testTag = "now-place-elevation",
                 )
+                if (placeContext.horizontalAccuracyMeters != null) {
+                    NowValue(
+                        label = stringResource(R.string.feature_now_accuracy_label),
+                        value = stringResource(
+                            R.string.feature_now_accuracy_meters,
+                            placeContext.horizontalAccuracyMeters.toDisplayNumber(),
+                        ),
+                        testTag = "now-place-accuracy",
+                    )
+                }
             }
 
             if (placeContextReady) {
@@ -323,6 +687,29 @@ private fun PlaceContextCard(
                             .testTag("now-set-up-place"),
                     ) {
                         Text(text = stringResource(R.string.feature_now_set_up_place))
+                    }
+                } else if (onRefreshDeviceLocation != null) {
+                    Button(
+                        onClick = onRefreshDeviceLocation,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .testTag("now-reacquire-device-location"),
+                    ) {
+                        Text(
+                            text = stringResource(
+                                R.string.feature_now_refresh_device_location,
+                            ),
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = onChange,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .testTag("now-change-context"),
+                    ) {
+                        Text(text = stringResource(R.string.feature_now_location_options))
                     }
                 } else {
                     OutlinedButton(
@@ -338,6 +725,403 @@ private fun PlaceContextCard(
             }
         }
     }
+}
+
+@Composable
+private fun PlaceContextEditor(
+    existingContext: NowPlaceContext?,
+    defaultTimeZoneId: String,
+    deviceLocationState: DeviceLocationUiState,
+    onRequestDeviceLocation: () -> Unit,
+    onCancelDeviceLocation: () -> Unit,
+    onOpenAppSettings: () -> Unit,
+    onOpenLocationSettings: () -> Unit,
+    onSave: suspend (NowPlaceContext) -> Unit,
+    onCancel: () -> Unit,
+    onClear: (suspend () -> Unit)?,
+) {
+    var showManualEditor by remember { mutableStateOf(false) }
+
+    if (showManualEditor) {
+        ManualPlaceEditor(
+            existingContext = existingContext,
+            defaultTimeZoneId = defaultTimeZoneId,
+            onSave = onSave,
+            onCancel = onCancel,
+            onClear = onClear,
+        )
+    } else {
+        DevicePlaceEditor(
+            state = deviceLocationState,
+            onRequest = onRequestDeviceLocation,
+            onCancelRequest = onCancelDeviceLocation,
+            onOpenAppSettings = onOpenAppSettings,
+            onOpenLocationSettings = onOpenLocationSettings,
+            onUseManual = {
+                onCancelDeviceLocation()
+                showManualEditor = true
+            },
+            onSave = onSave,
+            onCancel = {
+                onCancelDeviceLocation()
+                onCancel()
+            },
+            onClear = onClear,
+        )
+    }
+}
+
+@Composable
+private fun DevicePlaceEditor(
+    state: DeviceLocationUiState,
+    onRequest: () -> Unit,
+    onCancelRequest: () -> Unit,
+    onOpenAppSettings: () -> Unit,
+    onOpenLocationSettings: () -> Unit,
+    onUseManual: () -> Unit,
+    onSave: suspend (NowPlaceContext) -> Unit,
+    onCancel: () -> Unit,
+    onClear: (suspend () -> Unit)?,
+) {
+    val editorScope = rememberCoroutineScope()
+    var operationInProgress by remember { mutableStateOf(false) }
+    var saveFailed by remember { mutableStateOf(false) }
+    var clearFailed by remember { mutableStateOf(false) }
+    var showTechnicalDetails by remember { mutableStateOf(false) }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("now-place-editor"),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.feature_now_editor_title),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.semantics { heading() },
+            )
+            Text(
+                text = stringResource(R.string.feature_now_editor_explanation),
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            Text(
+                text = stringResource(R.string.feature_now_device_location_help),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+
+            when (state) {
+                DeviceLocationUiState.Idle -> {
+                    Button(
+                        onClick = onRequest,
+                        enabled = !operationInProgress,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .testTag("now-use-device-location"),
+                    ) {
+                        Text(text = stringResource(R.string.feature_now_use_device_location))
+                    }
+                }
+
+                DeviceLocationUiState.Locating -> {
+                    CircularProgressIndicator(
+                        modifier = Modifier.testTag("now-location-progress"),
+                    )
+                    StatusMessage(
+                        text = stringResource(R.string.feature_now_locating),
+                        testTag = "now-location-status-message",
+                    )
+                    OutlinedButton(
+                        onClick = onCancelRequest,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .testTag("now-cancel-location-request"),
+                    ) {
+                        Text(text = stringResource(R.string.feature_now_cancel))
+                    }
+                }
+
+                is DeviceLocationUiState.PermissionDenied -> {
+                    StatusMessage(
+                        text = stringResource(
+                            if (state.openSettingsRequired) {
+                                R.string.feature_now_location_permission_settings
+                            } else {
+                                R.string.feature_now_location_permission_denied
+                            },
+                        ),
+                        testTag = "now-location-permission-error",
+                        isError = true,
+                    )
+                    Button(
+                        onClick = if (state.openSettingsRequired) {
+                            onOpenAppSettings
+                        } else {
+                            onRequest
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .testTag("now-location-permission-action"),
+                    ) {
+                        Text(
+                            text = stringResource(
+                                if (state.openSettingsRequired) {
+                                    R.string.feature_now_open_app_settings
+                                } else {
+                                    R.string.feature_now_retry_location
+                                },
+                            ),
+                        )
+                    }
+                }
+
+                DeviceLocationUiState.LocationDisabled -> {
+                    StatusMessage(
+                        text = stringResource(R.string.feature_now_location_disabled),
+                        testTag = "now-location-disabled-error",
+                        isError = true,
+                    )
+                    Button(
+                        onClick = onOpenLocationSettings,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .testTag("now-open-location-settings"),
+                    ) {
+                        Text(text = stringResource(R.string.feature_now_open_location_settings))
+                    }
+                    OutlinedButton(
+                        onClick = onRequest,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .testTag("now-retry-location"),
+                    ) {
+                        Text(text = stringResource(R.string.feature_now_retry_location))
+                    }
+                }
+
+                DeviceLocationUiState.TimedOut,
+                DeviceLocationUiState.Unavailable,
+                -> {
+                    StatusMessage(
+                        text = stringResource(
+                            if (state == DeviceLocationUiState.TimedOut) {
+                                R.string.feature_now_location_timeout
+                            } else {
+                                R.string.feature_now_location_unavailable_error
+                            },
+                        ),
+                        testTag = "now-location-unavailable-error",
+                        isError = true,
+                    )
+                    Button(
+                        onClick = onRequest,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .testTag("now-retry-location"),
+                    ) {
+                        Text(text = stringResource(R.string.feature_now_retry_location))
+                    }
+                }
+
+                is DeviceLocationUiState.Preview -> {
+                    Text(
+                        text = stringResource(R.string.feature_now_location_preview_title),
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.semantics { heading() },
+                    )
+                    Text(
+                        text = stringResource(R.string.feature_now_location_preview_explanation),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    NowValue(
+                        label = stringResource(R.string.feature_now_location_label),
+                        value = stringResource(
+                            if (state.isApproximate) {
+                                R.string.feature_now_location_approximate
+                            } else {
+                                R.string.feature_now_location_precise
+                            },
+                        ),
+                        testTag = "now-location-preview-kind",
+                        forceLtrValue = false,
+                    )
+                    state.context.horizontalAccuracyMeters?.let { accuracy ->
+                        NowValue(
+                            label = stringResource(R.string.feature_now_accuracy_label),
+                            value = stringResource(
+                                R.string.feature_now_accuracy_meters,
+                                accuracy.toDisplayNumber(),
+                            ),
+                            testTag = "now-location-preview-accuracy",
+                        )
+                    }
+                    NowValue(
+                        label = stringResource(R.string.feature_now_time_zone_label),
+                        value = state.context.timeZoneId,
+                        testTag = "now-location-preview-time-zone",
+                    )
+                    TextButton(
+                        onClick = { showTechnicalDetails = !showTechnicalDetails },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .testTag("now-location-technical-toggle"),
+                    ) {
+                        Text(
+                            text = stringResource(
+                                if (showTechnicalDetails) {
+                                    R.string.feature_now_hide_technical_details
+                                } else {
+                                    R.string.feature_now_show_technical_details
+                                },
+                            ),
+                        )
+                    }
+                    if (showTechnicalDetails) {
+                        Text(
+                            text = stringResource(
+                                R.string.feature_now_technical_coordinates,
+                                state.context.latitudeDegrees.toDisplayNumber(),
+                                state.context.longitudeDegrees.toDisplayNumber(),
+                            ),
+                            style = MaterialTheme.typography.bodyMedium.merge(
+                                TextStyle(textDirection = TextDirection.Ltr),
+                            ),
+                            modifier = Modifier.testTag("now-location-technical-coordinates"),
+                        )
+                    }
+                    if (saveFailed) {
+                        StatusMessage(
+                            text = stringResource(R.string.feature_now_save_persistence_error),
+                            testTag = "now-place-persistence-error",
+                            isError = true,
+                        )
+                    }
+                    Button(
+                        onClick = {
+                            operationInProgress = true
+                            saveFailed = false
+                            editorScope.launch {
+                                try {
+                                    withContext(NonCancellable) { onSave(state.context) }
+                                } catch (cancelled: CancellationException) {
+                                    throw cancelled
+                                } catch (_: Exception) {
+                                    saveFailed = true
+                                } finally {
+                                    operationInProgress = false
+                                }
+                            }
+                        },
+                        enabled = !operationInProgress,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .testTag("now-use-this-location"),
+                    ) {
+                        Text(text = stringResource(R.string.feature_now_use_this_location))
+                    }
+                    OutlinedButton(
+                        onClick = onRequest,
+                        enabled = !operationInProgress,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .testTag("now-refresh-device-location"),
+                    ) {
+                        Text(text = stringResource(R.string.feature_now_retry_location))
+                    }
+                }
+            }
+
+            if (state != DeviceLocationUiState.Locating &&
+                state !is DeviceLocationUiState.Preview
+            ) {
+                OutlinedButton(
+                    onClick = onUseManual,
+                    enabled = !operationInProgress,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .testTag("now-enter-location-manually"),
+                ) {
+                    Text(text = stringResource(R.string.feature_now_enter_manually))
+                }
+            }
+            OutlinedButton(
+                onClick = onCancel,
+                enabled = !operationInProgress,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .testTag("now-cancel-context"),
+            ) {
+                Text(text = stringResource(R.string.feature_now_cancel))
+            }
+            if (onClear != null) {
+                if (clearFailed) {
+                    StatusMessage(
+                        text = stringResource(R.string.feature_now_clear_persistence_error),
+                        testTag = "now-place-persistence-error",
+                        isError = true,
+                    )
+                }
+                TextButton(
+                    onClick = {
+                        clearFailed = false
+                        operationInProgress = true
+                        editorScope.launch {
+                            try {
+                                withContext(NonCancellable) { onClear() }
+                            } catch (cancelled: CancellationException) {
+                                throw cancelled
+                            } catch (_: Exception) {
+                                clearFailed = true
+                            } finally {
+                                operationInProgress = false
+                            }
+                        }
+                    },
+                    enabled = !operationInProgress,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .testTag("now-clear-context"),
+                ) {
+                    Text(text = stringResource(R.string.feature_now_clear_context))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusMessage(
+    text: String,
+    testTag: String,
+    isError: Boolean = false,
+) {
+    Text(
+        text = text,
+        color = if (isError) MaterialTheme.colorScheme.error else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        },
+        style = MaterialTheme.typography.bodyLarge,
+        modifier = Modifier
+            .testTag(testTag)
+            .semantics { liveRegion = LiveRegionMode.Polite },
+    )
 }
 
 @Composable
@@ -402,11 +1186,11 @@ private fun ManualPlaceEditor(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Text(
-                text = stringResource(R.string.feature_now_editor_title),
+                text = stringResource(R.string.feature_now_manual_editor_title),
                 style = MaterialTheme.typography.titleMedium,
             )
             Text(
-                text = stringResource(R.string.feature_now_editor_explanation),
+                text = stringResource(R.string.feature_now_manual_editor_explanation),
                 style = MaterialTheme.typography.bodyLarge,
             )
 

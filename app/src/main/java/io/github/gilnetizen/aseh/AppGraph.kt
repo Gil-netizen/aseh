@@ -7,6 +7,8 @@ import io.github.gilnetizen.aseh.core.database.ManualPlaceContextRepository
 import io.github.gilnetizen.aseh.core.database.ManualPlaceContextRepositoryFactory
 import io.github.gilnetizen.aseh.core.database.OperationalStore
 import io.github.gilnetizen.aseh.core.database.OperationalStoreFactory
+import io.github.gilnetizen.aseh.location.AndroidDeviceLocationClient
+import io.github.gilnetizen.aseh.location.DeviceLocationClient
 import java.io.Closeable
 import java.time.Clock
 import java.time.ZoneId
@@ -28,6 +30,9 @@ class AppGraph(context: Context) : Closeable {
   val clock: Clock = Clock.systemUTC()
 
   val deviceTimeZone: () -> ZoneId = ZoneId::systemDefault
+
+  val deviceLocationClient: DeviceLocationClient =
+    AndroidDeviceLocationClient(context.applicationContext)
 
   val interfacePreferencesRepository: InterfacePreferencesRepository =
     InterfacePreferencesRepositoryFactory.create(

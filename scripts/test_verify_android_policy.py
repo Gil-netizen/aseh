@@ -41,6 +41,71 @@ class VerifyAndroidPolicyTest(unittest.TestCase):
             self.assertIn("network client SDK", reasons)
             self.assertIn("INTERNET permission", reasons)
 
+    def test_allows_coarse_and_fine_foreground_location_permissions(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._write_valid_app_policy(root)
+            manifest = root / "app" / "src" / "main" / "AndroidManifest.xml"
+            self._write(
+                manifest,
+                manifest.read_text(encoding="utf-8").replace(
+                    "  <application",
+                    """  <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+  <application""",
+                ),
+            )
+
+            findings = policy.run_checks(
+                root,
+                require_merged_manifests=False,
+                dependency_reports=[],
+            )
+
+            self.assertEqual([], findings)
+
+    def test_rejects_background_and_foreground_service_location(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._write_valid_app_policy(root)
+            manifest = root / "app" / "src" / "main" / "AndroidManifest.xml"
+            self._write(
+                manifest,
+                manifest.read_text(encoding="utf-8")
+                .replace(
+                    "  <application",
+                    """  <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+  <application""",
+                )
+                .replace(
+                    "    android:dataExtractionRules=\"@xml/data_extraction_rules\" />",
+                    """    android:dataExtractionRules="@xml/data_extraction_rules">
+    <service
+      android:name=".TrackingService"
+      android:foregroundServiceType="dataSync|location" />
+  </application>""",
+                ),
+            )
+
+            reasons = {
+                finding.reason
+                for finding in policy.run_checks(
+                    root,
+                    require_merged_manifests=False,
+                    dependency_reports=[],
+                )
+            }
+
+            self.assertEqual(
+                {
+                    "background location permission",
+                    "location foreground-service permission",
+                    "location foreground-service declaration",
+                },
+                reasons,
+            )
+
     def test_scans_resolved_dependency_report(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

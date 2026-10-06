@@ -188,6 +188,7 @@ class AsehNavigationTest {
     composeRule.onNodeWithTag("now-set-up-place")
       .assertIsDisplayed()
       .performClick()
+    openManualPlaceEditor()
     enterManualPlaceText("now-place-label-input", syntheticManualPlace.label)
     enterManualPlaceText("now-place-latitude-input", "12.25")
     enterManualPlaceText("now-place-longitude-input", "-34.5")
@@ -225,6 +226,7 @@ class AsehNavigationTest {
     composeRule.onNodeWithTag("now-set-up-place")
       .assertIsDisplayed()
       .performClick()
+    openManualPlaceEditor()
     enterManualPlaceText("now-place-label-input", "Unsaved synthetic place")
     enterManualPlaceText("now-place-latitude-input", "1.25")
     enterManualPlaceText("now-place-longitude-input", "-2.5")
@@ -243,6 +245,7 @@ class AsehNavigationTest {
     composeRule.onNodeWithTag("now-set-up-place")
       .assertIsDisplayed()
       .performClick()
+    openManualPlaceEditor()
     composeRule.onNodeWithTag("now-place-label-input")
       .performScrollTo()
       .assertIsDisplayed()
@@ -312,6 +315,16 @@ class AsehNavigationTest {
       .performTextInput(value)
   }
 
+  private fun openManualPlaceEditor() {
+    composeRule.onNodeWithTag("now-enter-location-manually")
+      .performScrollTo()
+      .assertIsDisplayed()
+      .performClick()
+    composeRule.onNodeWithTag("now-place-label-input")
+      .performScrollTo()
+      .assertIsDisplayed()
+  }
+
   private fun waitUntilManualPlaceCleared() {
     composeRule.waitUntil(timeoutMillis = 5_000) {
       runCatching {
@@ -333,7 +346,7 @@ class AsehNavigationTest {
 
   private fun assertSyntheticManualPlaceIsDisplayed() {
     composeRule.onNodeWithTag("now-location-status")
-      .assertTextContains("manual place context is active", substring = true)
+      .assertTextContains("manually entered location is active", substring = true)
     composeRule.onNodeWithTag("now-place-name")
       .assertTextContains(syntheticManualPlace.label, substring = true)
     composeRule.onNodeWithTag("now-place-coordinates")

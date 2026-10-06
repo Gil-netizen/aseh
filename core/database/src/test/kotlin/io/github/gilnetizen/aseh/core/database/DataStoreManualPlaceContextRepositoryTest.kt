@@ -55,6 +55,48 @@ class DataStoreManualPlaceContextRepositoryTest {
     }
 
     @Test
+    fun legacyManualRecordWithoutSourceDecodesAsManual() = runTest {
+        val store = dataStore(backgroundScope, "legacy-manual.preferences_pb")
+        store.edit { values ->
+            values[stringPreferencesKey("label")] = "Legacy place"
+            values[doublePreferencesKey("latitude_degrees")] = 31.778
+            values[doublePreferencesKey("longitude_degrees")] = 35.235
+            values[stringPreferencesKey("time_zone_id")] = "Asia/Jerusalem"
+        }
+
+        assertEquals(
+            ManualPlaceContext(
+                label = "Legacy place",
+                latitudeDegrees = 31.778,
+                longitudeDegrees = 35.235,
+                elevationMeters = null,
+                timeZoneId = "Asia/Jerusalem",
+                source = PlaceContextSource.MANUAL,
+                horizontalAccuracyMeters = null,
+            ),
+            DataStoreManualPlaceContextRepository(store).context.first(),
+        )
+    }
+
+    @Test
+    fun deviceLocationRoundTripsWithoutRequiringAUserLabel() = runTest {
+        val repository = repository(backgroundScope, "device-location.preferences_pb")
+        val deviceContext = ManualPlaceContext(
+            label = "",
+            latitudeDegrees = 31.778,
+            longitudeDegrees = 35.235,
+            elevationMeters = 754.0,
+            timeZoneId = "Asia/Jerusalem",
+            source = PlaceContextSource.DEVICE,
+            horizontalAccuracyMeters = 18.5,
+        )
+
+        repository.save(deviceContext)
+
+        assertEquals(deviceContext, repository.context.first())
+    }
+
+    @Test
     fun inclusiveCoordinateBoundariesAreAccepted() = runTest {
         val repository = DataStoreManualPlaceContextRepository(InMemoryPreferencesDataStore())
         val northEast = validContext.copy(
@@ -88,6 +130,8 @@ class DataStoreManualPlaceContextRepositoryTest {
             validContext.copy(longitudeDegrees = -180.000_001),
             validContext.copy(longitudeDegrees = Double.POSITIVE_INFINITY),
             validContext.copy(elevationMeters = Double.NEGATIVE_INFINITY),
+            validContext.copy(horizontalAccuracyMeters = -0.01),
+            validContext.copy(horizontalAccuracyMeters = Double.NaN),
             validContext.copy(timeZoneId = "GMT+02:00"),
             validContext.copy(timeZoneId = "Not/A_Zone"),
         )
@@ -162,6 +206,36 @@ class DataStoreManualPlaceContextRepositoryTest {
         }
         assertNull(
             DataStoreManualPlaceContextRepository(wrongOptionalTypeStore).context.first(),
+        )
+
+        val wrongSourceTypeStore = dataStore(
+            backgroundScope,
+            "wrong-source-type.preferences_pb",
+        )
+        wrongSourceTypeStore.edit { values ->
+            values[stringPreferencesKey("label")] = "Synthetic place"
+            values[doublePreferencesKey("latitude_degrees")] = 10.0
+            values[doublePreferencesKey("longitude_degrees")] = 20.0
+            values[stringPreferencesKey("time_zone_id")] = "Etc/UTC"
+            values[intPreferencesKey("source")] = 1
+        }
+        assertNull(
+            DataStoreManualPlaceContextRepository(wrongSourceTypeStore).context.first(),
+        )
+
+        val wrongAccuracyTypeStore = dataStore(
+            backgroundScope,
+            "wrong-accuracy-type.preferences_pb",
+        )
+        wrongAccuracyTypeStore.edit { values ->
+            values[doublePreferencesKey("latitude_degrees")] = 10.0
+            values[doublePreferencesKey("longitude_degrees")] = 20.0
+            values[stringPreferencesKey("time_zone_id")] = "Etc/UTC"
+            values[stringPreferencesKey("source")] = "DEVICE"
+            values[stringPreferencesKey("horizontal_accuracy_meters")] = "nearby"
+        }
+        assertNull(
+            DataStoreManualPlaceContextRepository(wrongAccuracyTypeStore).context.first(),
         )
     }
 

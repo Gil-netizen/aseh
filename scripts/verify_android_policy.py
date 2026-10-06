@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Fail closed when the Android project declares online or telemetry surfaces.
+"""Fail closed when Android declares prohibited online, telemetry, or location surfaces.
 
 The walking skeleton is intentionally offline and unauthenticated. This checker
 scans Gradle declarations, dependency verification/lock files, resolved Gradle
 dependency reports, source manifests, and generated merged manifests. It emits
-only dependency identifiers and paths; it never prints file contents.
+only dependency identifiers and paths; it never prints file contents. Foreground
+coarse and fine location are allowed; background and service-based location are not.
 """
 
 from __future__ import annotations
@@ -20,6 +21,8 @@ import xml.etree.ElementTree as ET
 
 INTERNET_PERMISSION = re.compile(r"android\.permission\.INTERNET\b")
 ANDROID_ATTRIBUTE = "{http://schemas.android.com/apk/res/android}"
+BACKGROUND_LOCATION_PERMISSION = "android.permission.ACCESS_BACKGROUND_LOCATION"
+LOCATION_FOREGROUND_SERVICE_PERMISSION = "android.permission.FOREGROUND_SERVICE_LOCATION"
 APP_MANIFEST = Path("app/src/main/AndroidManifest.xml")
 BACKUP_RULES = Path("app/src/main/res/xml/backup_rules.xml")
 DATA_EXTRACTION_RULES = Path("app/src/main/res/xml/data_extraction_rules.xml")
@@ -221,6 +224,23 @@ def _parse_xml(path: Path, description: str) -> tuple[ET.Element | None, list[Fi
 
 def _local_name(tag: str) -> str:
     return tag.rsplit("}", 1)[-1]
+
+
+def _location_manifest_findings(path: Path, manifest_root: ET.Element) -> list[Finding]:
+    findings: list[Finding] = []
+    for element in manifest_root.iter():
+        element_name = _local_name(element.tag)
+        if element_name.startswith("uses-permission"):
+            permission = element.get(f"{ANDROID_ATTRIBUTE}name")
+            if permission == BACKGROUND_LOCATION_PERMISSION:
+                findings.append(Finding(path, 0, "background location permission"))
+            elif permission == LOCATION_FOREGROUND_SERVICE_PERMISSION:
+                findings.append(Finding(path, 0, "location foreground-service permission"))
+        elif element_name == "service":
+            service_types = element.get(f"{ANDROID_ATTRIBUTE}foregroundServiceType", "")
+            if "location" in {value.strip() for value in service_types.split("|")}:
+                findings.append(Finding(path, 0, "location foreground-service declaration"))
+    return findings
 
 
 def _required_exclusion_findings(
@@ -427,6 +447,7 @@ def run_checks(
         findings.extend(parse_findings)
         if manifest_root is not None:
             parsed_manifests[path] = manifest_root
+            findings.extend(_location_manifest_findings(path, manifest_root))
 
     app_manifest = root / APP_MANIFEST
     if app_manifest.is_file():
