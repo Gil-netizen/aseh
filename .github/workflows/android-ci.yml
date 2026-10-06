@@ -1,0 +1,311 @@
+name: Android CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build, lint, and offline policy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Temurin 17
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          # setup-java's exact SemVer for OpenJDK 17.0.20.1+1.
+          java-version: '17.0.20+101'
+          check-latest: false
+          verify-signature: true
+
+      - name: Verify exact Temurin release
+        shell: bash
+        run: |
+          set -euo pipefail
+          java_settings="$(java -XshowSettings:properties -version 2>&1)"
+          grep -Eq '^[[:space:]]*java\.runtime\.version = 17\.0\.20\.1\+1[[:space:]]*$' <<< "${java_settings}"
+          grep -Eq '^[[:space:]]*java\.vendor = Eclipse Adoptium[[:space:]]*$' <<< "${java_settings}"
+
+      - name: Set up Android command-line tools 22.0
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+        with:
+          cmdline-tools-version: '15859902'
+          accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: false
+          packages: >-
+            platform-tools platforms;android-37.0 build-tools;37.0.0
+
+      - name: Set up Gradle and validate wrapper
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          cache-provider: basic
+          validate-wrappers: true
+
+      - name: Verify pinned SDK inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/reports/android-sdk
+          sdkmanager --list_installed > build/reports/android-sdk/installed-packages.txt
+          sdkmanager_version="$(sdkmanager --version 2>/dev/null | awk 'NF { print $1; exit }')"
+          printf '%s\n' "${sdkmanager_version}" > build/reports/android-sdk/sdkmanager-version.txt
+          test "${sdkmanager_version}" = '22.0'
+          grep -Eq '^[[:space:]]*platform-tools[[:space:]]+\|[[:space:]]+37\.0\.1([[:space:]]|$)' build/reports/android-sdk/installed-packages.txt
+          grep -Eq '^[[:space:]]*build-tools;37\.0\.0[[:space:]]+\|[[:space:]]+37\.0\.0([[:space:]]|$)' build/reports/android-sdk/installed-packages.txt
+          grep -Eq '^[[:space:]]*platforms;android-37\.0[[:space:]]+\|[[:space:]]+2([[:space:]]|$)' build/reports/android-sdk/installed-packages.txt
+
+      - name: Test repository policy checker
+        shell: bash
+        run: |
+          python3 -m unittest scripts/test_verify_android_policy.py
+          bash -n scripts/run_android_emulator_tests.sh
+
+      - name: Require pinned Gradle dependency verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! -s gradle/verification-metadata.xml ]]; then
+            echo '::error::gradle/verification-metadata.xml is required for strict dependency verification.'
+            exit 1
+          fi
+          grep -Fqx \
+            'distributionSha256Sum=bbaeb2fef8710818cf0e261201dab964c572f92b942812df0c3620d62a529a01' \
+            gradle/wrapper/gradle-wrapper.properties \
+            || {
+              echo '::error::The Gradle 9.6.0 distribution checksum is missing or changed.'
+              exit 1
+            }
+
+      - name: Check source declarations for online SDKs
+        shell: bash
+        run: python3 scripts/verify_android_policy.py
+
+      - name: Build and test Android variants
+        shell: bash
+        run: |
+          chmod +x gradlew
+          ./gradlew \
+            --no-daemon \
+            --stacktrace \
+            --dependency-verification strict \
+            clean checkNoDynamicVersions test lint assembleDevDebug assembleStagingRelease assembleProdRelease
+
+      - name: Record resolved runtime dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/reports/dependency-policy
+          for configuration in \
+            devDebugRuntimeClasspath \
+            stagingReleaseRuntimeClasspath \
+            prodReleaseRuntimeClasspath
+          do
+            ./gradlew \
+              --no-daemon \
+              --stacktrace \
+              --dependency-verification strict \
+              :app:dependencies \
+              --configuration "${configuration}" \
+              > "build/reports/dependency-policy/${configuration}.txt"
+          done
+
+      - name: Check merged manifests and resolved dependencies
+        shell: bash
+        run: |
+          python3 scripts/verify_android_policy.py \
+            --require-merged-manifests \
+            --dependency-report build/reports/dependency-policy/devDebugRuntimeClasspath.txt \
+            --dependency-report build/reports/dependency-policy/stagingReleaseRuntimeClasspath.txt \
+            --dependency-report build/reports/dependency-policy/prodReleaseRuntimeClasspath.txt
+
+      - name: Upload APKs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: android-apks
+          path: '**/build/outputs/apk/**/*.apk'
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload build, lint, and test reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: android-build-reports
+          path: |
+            build/reports/android-sdk/**
+            build/reports/dependency-policy/**
+            **/build/reports/**
+            **/build/test-results/**
+            **/build/outputs/lint-results*.html
+            **/build/outputs/lint-results*.xml
+          if-no-files-found: warn
+          retention-days: 14
+
+  instrumentation:
+    name: Instrumentation (${{ matrix.label }})
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: api-26
+            api-level: '26'
+            system-image-api-level: '26'
+            system-image: system-images;android-26;google_apis;x86_64
+            system-image-revision: '16'
+            profile: pixel_2
+            gpu-mode: swiftshader_indirect
+            luma-sampling-mode: default
+            navigation-mode: default
+            task-snapshot-mode: default
+            font-scale: '1.0'
+          - label: api-37-0
+            api-level: '37.0'
+            system-image-api-level: '37.0'
+            system-image: system-images;android-37.0;google_apis;x86_64
+            system-image-revision: '6'
+            profile: pixel_c
+            # Generic software mode used Lavapipe/SwANGLE in the failed run.
+            # Keep GLES and Vulkan on the explicit supported SwiftShader mode.
+            gpu-mode: swiftshader
+            # Android 17 image revision 6 can abort SurfaceFlinger in its
+            # RegionSampling thread on Linux even with explicit SwiftShader.
+            # Disable that path through the image's debuggable local property.
+            luma-sampling-mode: disabled
+            # Pin navigation geometry for deterministic tablet assertions.
+            navigation-mode: threebutton
+            # Android 17 image revision 6 can abort system_server while its
+            # task-snapshot persister reads a host color buffer. Disable only
+            # that system service path on this exact, revision-checked image.
+            task-snapshot-mode: disabled
+            font-scale: '2.0'
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Temurin 17
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          # setup-java's exact SemVer for OpenJDK 17.0.20.1+1.
+          java-version: '17.0.20+101'
+          check-latest: false
+          verify-signature: true
+
+      - name: Verify exact Temurin release
+        shell: bash
+        run: |
+          set -euo pipefail
+          java_settings="$(java -XshowSettings:properties -version 2>&1)"
+          grep -Eq '^[[:space:]]*java\.runtime\.version = 17\.0\.20\.1\+1[[:space:]]*$' <<< "${java_settings}"
+          grep -Eq '^[[:space:]]*java\.vendor = Eclipse Adoptium[[:space:]]*$' <<< "${java_settings}"
+
+      - name: Install Android SDK and fixed emulator image
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+        with:
+          cmdline-tools-version: '15859902'
+          accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: false
+          packages: >-
+            platform-tools platforms;android-37.0 build-tools;37.0.0 emulator ${{ matrix.system-image }}
+
+      - name: Set up Gradle and validate wrapper
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          cache-provider: basic
+          cache-read-only: true
+          validate-wrappers: true
+
+      - name: Verify emulator SDK packages
+        shell: bash
+        env:
+          SYSTEM_IMAGE_PACKAGE: ${{ matrix.system-image }}
+        run: |
+          set -euo pipefail
+          mkdir -p build/reports/android-sdk
+          sdkmanager --list_installed > "build/reports/android-sdk/installed-${{ matrix.label }}.txt"
+          sdkmanager_version="$(sdkmanager --version 2>/dev/null | awk 'NF { print $1; exit }')"
+          test "${sdkmanager_version}" = '22.0'
+          grep -Eq '^[[:space:]]*platform-tools[[:space:]]+\|[[:space:]]+37\.0\.1([[:space:]]|$)' "build/reports/android-sdk/installed-${{ matrix.label }}.txt"
+          grep -Eq '^[[:space:]]*build-tools;37\.0\.0[[:space:]]+\|[[:space:]]+37\.0\.0([[:space:]]|$)' "build/reports/android-sdk/installed-${{ matrix.label }}.txt"
+          grep -Fq "${SYSTEM_IMAGE_PACKAGE}" "build/reports/android-sdk/installed-${{ matrix.label }}.txt"
+
+      - name: Preassemble instrumentation APKs
+        shell: bash
+        run: |
+          chmod +x gradlew
+          ./gradlew \
+            --no-daemon \
+            --no-parallel \
+            --stacktrace \
+            --dependency-verification strict \
+            :app:assembleDevDebug \
+            :app:assembleDevDebugAndroidTest \
+            :core:database:assembleDebugAndroidTest
+
+      - name: Enable KVM access
+        shell: bash
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules >/dev/null
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run Compose instrumentation and launch smoke test
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: ${{ matrix.api-level }}
+          system-image-api-level: ${{ matrix.system-image-api-level }}
+          target: google_apis
+          arch: x86_64
+          profile: ${{ matrix.profile }}
+          disk-size: '8G'
+          avd-name: aseh-${{ matrix.label }}
+          emulator-boot-timeout: '900'
+          emulator-options: >-
+            -no-window -gpu ${{ matrix.gpu-mode }} -no-snapshot -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          disable-spellchecker: true
+          script: >-
+            ASEH_FONT_SCALE="${{ matrix.font-scale }}"
+            ASEH_GPU_MODE="${{ matrix.gpu-mode }}"
+            ASEH_LUMA_SAMPLING_MODE="${{ matrix.luma-sampling-mode }}"
+            ASEH_NAVIGATION_MODE="${{ matrix.navigation-mode }}"
+            ASEH_TASK_SNAPSHOT_MODE="${{ matrix.task-snapshot-mode }}"
+            ASEH_SYSTEM_IMAGE="${{ matrix.system-image }}"
+            ASEH_SYSTEM_IMAGE_REVISION="${{ matrix.system-image-revision }}"
+            bash scripts/run_android_emulator_tests.sh "${{ matrix.label }}"
+
+      - name: Upload instrumentation and screenshot evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: android-instrumentation-${{ matrix.label }}
+          path: |
+            build/outputs/smoke-screenshots/**
+            build/reports/android-sdk/**
+            **/build/reports/androidTests/**
+            **/build/outputs/androidTest-results/**
+            **/build/outputs/connected_android_test_additional_output/**
+            **/build/outputs/**/*.png
+          if-no-files-found: warn
+          retention-days: 14

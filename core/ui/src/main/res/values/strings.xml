@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="aseh_destination_now">Now</string>
+    <string name="aseh_destination_practice">Practice</string>
+    <string name="aseh_destination_prayer">Pray</string>
+    <string name="aseh_destination_study">Study</string>
+    <string name="aseh_destination_build">Build</string>
+
+    <string name="aseh_destination_symbol_now">N</string>
+    <string name="aseh_destination_symbol_practice">Pc</string>
+    <string name="aseh_destination_symbol_prayer">Pr</string>
+    <string name="aseh_destination_symbol_study">S</string>
+    <string name="aseh_destination_symbol_build">B</string>
+</resources>
