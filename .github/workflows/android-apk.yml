@@ -1,11 +1,13 @@
 name: Android APK
 
 on:
-  pull_request:
+  push:
+    branches:
+      - codex/shabbat-rehearsal-alpha7
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: android-apk-${{ github.ref }}
@@ -13,7 +15,7 @@ concurrency:
 
 jobs:
   build-apk:
-    name: Build downloadable APK
+    name: Build and publish downloadable APK
     runs-on: ubuntu-24.04
     timeout-minutes: 20
 
@@ -57,3 +59,31 @@ jobs:
           path: app/build/outputs/apk/dev/debug/app-dev-debug.apk
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish direct APK download
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: '405516521'
+          TAG_NAME: v0.1.0-alpha.8
+          ASSET_NAME: ASEH-0.1.0-alpha.8-dev-debug.apk
+        run: |
+          set -euo pipefail
+          apk_path='app/build/outputs/apk/dev/debug/app-dev-debug.apk'
+          existing_asset_id="$(gh api "/repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}/assets" --jq ".[] | select(.name == \"${ASSET_NAME}\") | .id" | head -n 1)"
+          if [[ -n "${existing_asset_id}" ]]; then
+            gh api --method DELETE "/repos/${GITHUB_REPOSITORY}/releases/assets/${existing_asset_id}"
+          fi
+          curl --fail-with-body --location --request POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            --header 'Content-Type: application/vnd.android.package-archive' \
+            --data-binary "@${apk_path}" \
+            "https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}/assets?name=${ASSET_NAME}&label=ASEH%20alpha%208%20debug%20APK"
+          gh api --method PATCH "/repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
+            -F draft=false \
+            -F prerelease=true \
+            -f make_latest=false \
+            -f tag_name="${TAG_NAME}" \
+            -f name='ASEH 0.1.0-alpha.8' >/dev/null
