@@ -1,10 +1,10 @@
 # ExecPlan 0006: Functional Shabbat rehearsal
 
-**Status:** Implementation complete; definitive connected-device verification passed; clean build and artifact evidence in progress\
+**Status:** Implementation, settled-tree verification, and CI artifact staging complete; exact CI-byte and manual review in progress\
 **Owner:** Implementation: Codex; product acceptance and release: Gil\
 **Started:** 2026-10-06\
 **Last updated:** 2026-10-07\
-**Issue/PR:** Pending; working branch `codex/shabbat-rehearsal-alpha7`, based on `50a65a5`\
+**Issue/PR:** [PR #11](https://github.com/Gil-netizen/aseh/pull/11); working branch `codex/shabbat-rehearsal-alpha7`, based on `50a65a5`\
 **Related ADRs:** [ADR-0003](../adr/0003-database-and-data-class-separation.md), [ADR-0006](../adr/0006-manual-app-composition.md), [ADR-0007](../adr/0007-foreground-location-and-local-calendar.md)
 
 This file is the living implementation record for the alpha.7 functional-rehearsal slice. Keep `Progress`, `Decisions`, `Surprises and discoveries`, and `Outcomes` current. A contributor must be able to distinguish implemented behavior, verified behavior, and intended behavior without relying on chat history.
@@ -28,9 +28,10 @@ This is an operational rehearsal of product mechanics. It is not yet a complete 
 - [x] Self, Household, and Qahal development workspace dashboards expose actionable due work, lifecycle transitions, persisted command replay, and a context-filtered Now summary.
 - [x] The development flavor installs and activates a deterministically compiled, Ed25519-signed synthetic `.asehpack`; API 37 verifies and searches it, while API 26 fails closed with an explicit unsupported message.
 - [x] The settled app instrumentation suite passes on API 26 (`43/43`) and API 37 (`44/44`) with the API 37 emulator at 200% font scale.
-- [ ] The final integrated working tree passes the complete clean build, unit, lint, Android policy, dependency, and APK/test-APK assembly gates listed below. Focused checks and the definitive connected-device suites pass; the all-module clean result remains pending.
+- [x] The settled working tree passes clean dependency/unit checks (354 tasks), lint (428 tasks), all three flavor and test-APK assemblies (790 tasks), Android policy, resolved-dependency/merged-manifest policy, staged secret/size checks, and cached-diff whitespace validation.
 - [ ] Final phone and tablet evidence covers English LTR, Hebrew-locale RTL fallback, mixed script, 200% text, TalkBack, GPS permission/recovery, process restart, packet share, and Android print/PDF output. Automated semantics, workflow, and 200% layout evidence exists; manual TalkBack and Android print/save-to-PDF review remains outstanding.
-- [ ] A newly built APK has the current package identity, recorded checksum, installation evidence, and a mobile-accessible review location.
+- [x] A newly built CI APK has the current package identity, recorded checksum and signer, and an authenticated mobile review location.
+- [ ] Install and cold-launch the exact CI-built APK bytes on API 26 and API 37; the locally verified APK has the same source and identity but a different ephemeral debug signature.
 - [ ] Gil reviews the concrete build and decides whether it should proceed to a pull request or review distribution. This plan does not authorize merge or publication.
 
 ## Canonical requirements
@@ -90,7 +91,7 @@ The current working tree adds a multi-module rehearsal:
 
 Current source declares `versionCode 7`, base `versionName 0.1.0-alpha.7`, minimum Android API 26, target API 37, and a distinct dev suffix intended to resolve to `io.github.gilnetizen.aseh.dev.alpha7.debug`. The development label is `ASEH alpha 7 review`.
 
-An earlier APK at `app/build/outputs/apk/dev/debug/app-dev-debug.apk` was rejected because its manifest reported the former package `io.github.gilnetizen.aseh.dev.debug`. The definitive build must create new bytes after the settled-tree gates pass. Package, version, digest, size, signer, source revision, and review URL remain explicit placeholders until those exact bytes are inspected and staged.
+An earlier APK at `app/build/outputs/apk/dev/debug/app-dev-debug.apk` was rejected because its manifest reported the former package `io.github.gilnetizen.aseh.dev.debug`. The CI candidate built after the settled-tree gates reports `io.github.gilnetizen.aseh.dev.alpha7.debug`, version code `7`, version name `0.1.0-alpha.7-dev-debug`, and the recorded digest, size, signer, source revision, and authenticated draft-release URL.
 
 ## Design and interfaces
 
@@ -256,10 +257,13 @@ Expected: every command exits zero and the newly built APK reports io.github.gil
 - [x] 2026-10-07 — Added distinct Self, Household, and Qahal development dashboards with due-soon work, lifecycle actions, a versioned persisted command log, and context-filtered Now summaries. These dashboards use a labeled synthetic fixture; they do not claim general user-created workspace CRUD.
 - [x] 2026-10-07 — Added a deterministic Ed25519-signed synthetic `.asehpack` to `dev`, exercised the real compile/verify/install/activate/FTS path on API 37, and made API 26 fail closed with an explicit unsupported state.
 - [x] 2026-10-07 — Reran the complete settled-tree app instrumentation suite: API 26 passed `43/43`; API 37 passed `44/44` at 200% font scale.
-- [ ] Record `[PENDING_FINAL_GRADLE_RESULT]` for the complete clean build, unit, lint, policy, secret/dependency, and APK/test-APK assembly gates on the settled working tree.
+- [x] 2026-10-07 — Passed clean `checkNoDynamicVersions test` (354 tasks), `lint` (428 tasks), and `assembleDevDebug assembleStagingRelease assembleProdRelease :app:assembleDevDebugAndroidTest :core:database:assembleDebugAndroidTest :core:content-android:assembleDebugAndroidTest` (790 tasks).
+- [x] 2026-10-07 — Passed Android policy unit tests (`16/16`), source and merged-manifest/resolved-dependency policy verification, a 178-file staged forbidden-pattern scan, the staged 5 MB size limit, and `git diff --cached --check`.
+- [x] 2026-10-07 — Installed the exact locally built `devDebug` APK and cold-launched it successfully on API 26 and API 37.
 - [ ] Complete manual TalkBack and Android print/save-to-PDF review; automated semantics and 200% layout evidence do not substitute for these checks.
-- [ ] Record the final APK digest, signer/certificate status, exact source commit, and mobile-accessible review location.
-- [ ] Obtain Gil's review of the concrete artifact and create a pull request only within the protected-main workflow.
+- [x] 2026-10-07 — Recorded the CI APK filename, package/version, size, SHA-256, v2 signer, source revision, and authenticated draft-release location after post-upload inspection.
+- [x] 2026-10-07 — Opened [PR #11](https://github.com/Gil-netizen/aseh/pull/11) against `codex/7-manual-place-context` within the protected-main workflow.
+- [ ] Obtain Gil's review of the concrete artifact and PR.
 
 ## Decisions
 
@@ -288,38 +292,42 @@ Expected: every command exits zero and the newly built APK reports io.github.gil
 | 2026-10-06 | A connected Gradle run exposed environment and test-assumption failures rather than a clean acceptance result. | Intermediate API 26 install/output failure; API 37 result 27/34 before subsequent focused fixes | Required a settled-tree rerun; the later definitive suites pass `43/43` and `44/44`. |
 | 2026-10-07 | A deterministic exact-source fake can test provider boundaries without a real model. | `DeterministicStudyProvider.kt`; adversarial unit tests | Keep fake identity visible and defer connected adapters. |
 | 2026-10-07 | A previous APK and current source disagreed about application ID. | `aapt dump badging` reported `io.github.gilnetizen.aseh.dev.debug`; current merged manifest/source expects `io.github.gilnetizen.aseh.dev.alpha7.debug` | The previous APK was rejected; accept only newly built and inspected bytes. |
-| 2026-10-07 | Earlier full build evidence predates later readiness, governance, provider, export, and content-plumbing changes. | Command history and subsequent file timestamps | The connected suites were rerun; the all-module clean Gradle gate still cannot be inferred from the earlier build. |
+| 2026-10-07 | Earlier full build evidence predates later readiness, governance, provider, export, and content-plumbing changes. | Command history and subsequent file timestamps | Both the connected suites and the split all-module Gradle gates were rerun against the settled tree and passed. |
 | 2026-10-07 | Platform Ed25519 verification used by the pack path is available on the API 37 review device but not the API 26 implementation. | Focused signed-pack instrumentation on both emulators | API 26 shows an explicit unsupported state and never treats the pack as verified or active. |
 
 ## Verification and acceptance
 
 ### Passing checkpoints
 
-These are real passing observations. The API 26 and API 37 rows below are the definitive settled-tree connected results; the all-module clean Gradle gate and exact candidate artifact inspection remain pending.
+These are real passing observations from the settled tree and staged CI candidate. The local build, lint, assembly, policy, scan, connected-device, and local APK install/cold-launch gates are complete. GitHub Actions built and staged a separately debug-signed candidate, then re-downloaded and inspected its exact bytes.
 
 | Checkpoint | Result | What it proves | Limit |
 |---|---|---|---|
-| `checkNoDynamicVersions test lint assembleDevDebug --write-locks` | Passed once; 478 tasks | The earlier functional slice compiled, tested, linted, and assembled with locked dependencies. | Predates the final persistence, status, and flavor-isolation changes. |
-| Focused model, database, app, Prayer, Study, and Build checks | Passed after the final functional changes | Typed assembly/status rules, Room persistence, transactional reading updates, atomic preference updates, fake-provider isolation, and app/test compilation have focused coverage. | Does not replace the definitive all-module clean gate. |
-| Room persistence checks | 21 JVM tests passed; 11 connected database tests passed on each API 26 and API 37 | Schema v2, v1-to-v2 migration, legacy import, transactions, deletion continuation, and persisted operational records behave at the repository boundary. | Full app instrumentation must still be rerun after these changes. |
-| Android policy checks | `python -m unittest scripts/test_verify_android_policy.py`: 16 passed; `python scripts/verify_android_policy.py`: passed | Current policy rules and their test harness accept the working tree at this checkpoint. | Final manifest-aware policy verification remains tied to the rebuilt variants. |
+| Clean dependency and unit gate | `clean checkNoDynamicVersions test`: passed, 354 tasks | The settled tree resolves pinned dependencies and passes unit tests from a clean state. | Does not replace connected-device or manual review. |
+| Lint gate | `lint`: passed, 428 tasks | Android lint passes across the settled multi-module tree. | Manual accessibility and content review remain separate. |
+| Flavor and test-APK assembly gate | `assembleDevDebug assembleStagingRelease assembleProdRelease :app:assembleDevDebugAndroidTest :core:database:assembleDebugAndroidTest :core:content-android:assembleDebugAndroidTest`: passed, 790 tasks | Development, staging, production, and required instrumentation APKs assemble from the settled tree. | Manual candidate review remains separate. |
+| Focused model, database, app, Prayer, Study, and Build checks | Passed after the final functional changes | Typed assembly/status rules, Room persistence, transactional reading updates, atomic preference updates, fake-provider isolation, and app/test compilation have focused coverage. | Manual product and content review remain separate. |
+| Room persistence checks | 21 JVM tests passed; 11 connected database tests passed on each API 26 and API 37 | Schema v2, v1-to-v2 migration, legacy import, transactions, deletion continuation, and persisted operational records behave at the repository boundary. | The definitive full-app suites are recorded separately below. |
+| Android and repository policy checks | Policy unit tests `16/16`; source policy passed; merged-manifest/resolved-dependency policy passed | Both source and generated variant evidence satisfy the Android policy checks. | This does not grant content or release approval. |
+| Staged repository checks | 178 files scanned with no forbidden secret patterns; no staged file exceeds 5 MB; `git diff --cached --check` passed | The staged change set passes the required secret-pattern, size, and whitespace checks. | Review is still required for semantic or editorial mistakes. |
 | API 26 full app instrumentation, settled tree | `OK (43 tests)` | The complete app workflow, persistence, deletion, workspace repository behavior, and explicit unsupported signed-pack state pass on Android 8.0. | Does not substitute for manual TalkBack, print/save-to-PDF, or exact candidate installation review. |
 | API 37 full app instrumentation, settled tree | `OK (44 tests)` at 200% font scale | The complete app workflow passes with expanded text, including Ed25519 pack verification, activation, and English/Hebrew search. | One additional API 34+ altitude test accounts for the count difference; manual accessibility and print review remain. |
 | Signed development pack | API 37 verified/active and searchable; API 26 explicitly unsupported | The real compiler, signature verifier, installer, activation repository, and FTS path are exercised without a runtime private key. Pack SHA-256: `3ECFBE962044F7DE6D84528E0489C90EC33DAFBC1E8BDA59620452F2E98AD8DF`; key ID: `21fe31dfa154a261626bf854046fd2271b7bed4b6abe45aa58877ef47f9721b9`. | Synthetic `dev` fixture only; it is not approved liturgy or production content. |
+| Exact local APK install and cold launch | Passed on API 26 and API 37 | The locally built `devDebug` APK installs and reaches a cold-launched app process on both review APIs. | The separately signed CI bytes still need device installation. |
+| Exact CI candidate inspection | `ASEH-0.1.0-alpha.7-dev-debug.apk`; 15,477,164 bytes; SHA-256 `c0ca3fddaf1475c5b070c7b6fe76510030e953a11c2d70c7528d17c57134bebc`; v2 signer `29b8e2fb3c9fcc9ef56a6bfb7ea8955b0f1ce94820ff4caca3949bd31f5852c0`; source `5b0fa9f232214adedc6ac2d243fb798a8c3700e2` | [Build/upload](https://github.com/Gil-netizen/aseh/actions/runs/37563055323) and [post-upload inspection](https://github.com/Gil-netizen/aseh/actions/runs/37563696581) passed against the staged bytes. | The unpublished draft link requires a signed-in GitHub account with repository access; exact CI-byte installation remains pending. |
 | Representative visual evidence | Phone Now/Practice/Prayer/Study/Build and API 37 tablet Now/Prayer/Build at 200% text captured in `docs/evidence/alpha7/` | The implemented destinations render real workflow content across phone and expanded-text tablet surfaces. | Screenshots do not establish TalkBack behavior or actual print/save-to-PDF output. |
 
 ### Remaining verification
 
 - Early API 26 installation/output and API 37 navigation failures were repaired. The final settled-tree suites now pass `43/43` on API 26 and `44/44` on API 37 at 200% font scale.
-- The definitive all-module result remains `[PENDING_FINAL_GRADLE_RESULT]`.
+- The settled-tree Gradle, policy, staged scan, and local APK install/cold-launch gates are complete with the results above.
 - Android packet preview/share/print code compiles and has unit/semantics coverage, but manual TalkBack review and an actual Android print-service/save-to-PDF walkthrough are not recorded. These remain explicit human-review residuals.
-- Final candidate filename, size, package/version inspection, SHA-256, signer fingerprint, source commit, install evidence, and mobile download URL remain placeholders in the alpha.7 review guide.
+- Final CI candidate filename, size, package/version, SHA-256, signer fingerprint, source commit, and authenticated mobile download URL are recorded in the alpha.7 review guide. Exact CI-byte install evidence remains pending; local-build install/cold-launch evidence is complete.
 
-### Required final evidence
+### Remaining candidate and human evidence
 
-- Clean build from the pinned JDK and locked dependencies after all concurrent edits stop.
-- Unit and lint results for every changed module, Android policy checks, secret scan, dependency review, and `git diff --check`.
-- API 26 and API 37 install, cold launch, workflow completion, process death/restart, upgrade/reinstall expectations, local-data deletion, and uninstall.
+- Install and cold-launch the separately signed CI-built APK on API 26 and API 37.
+- Complete manual workflow, process death/restart, upgrade/reinstall expectations, local-data deletion, and uninstall review.
 - Airplane-mode GPS/local calculations plus complete Practice → Build → Prayer → Study → packet flow.
 - Phone and tablet evidence in English LTR and Hebrew-locale RTL fallback, mixed script, 200% font, TalkBack order/names/states, contrast, dark mode where supported, and touch targets.
 - Packet preview cancel/confirm, share chooser, print service, save-to-PDF, selectable structured text, reading order, and disclosure behavior.
@@ -331,7 +339,7 @@ These are real passing observations. The API 26 and API 37 rows below are the de
 
 Alpha.7 is first staged as a development review build. It must not be promoted to staging or production because those flavors have no approved content catalog. The intended review package is `io.github.gilnetizen.aseh.dev.alpha7.debug`; it installs separately from the production package and earlier development IDs. Its debug signature is temporary and does not establish upgrade continuity.
 
-Before review distribution, rebuild from the settled source, inspect the APK manifest, calculate its digest, install that exact file on the test matrix, and copy that exact file to the review location. Never reuse the previously rejected bytes. A review link is added only after the checksum and install result are tied to the same bytes.
+The exact locally built `devDebug` APK has been installed and cold-launched on API 26 and API 37. The CI artifact record now ties its manifest, digest, signer, source revision, and authenticated draft URL to one post-upload-inspected set of bytes. Its ephemeral signer differs from the local artifact, so exact CI-byte installation remains a review step. Never reuse the previously rejected bytes.
 
 State recovery is intentionally modest. Room uses explicit schema migrations without destructive fallback, while the small DataStore preferences use additive defaults. The first Room-backed version imports any legacy development rehearsal aggregate once and keeps the import idempotent across interruption. The app offers confirmed local-data deletion across Room, preferences, and saved place context. Uninstalling the review package removes its internal state because backup is disabled. Users must export any packet they want to retain before deletion or uninstall. Externally shared, printed, or saved files remain outside ASEH and are not removed by app deletion.
 
@@ -347,10 +355,10 @@ If the review build is broken, remove it from the review instructions and issue 
 - **Language gap:** English is the implemented content language. Hebrew locale provides RTL structure and an English fallback, not a reviewed Hebrew interface or Hebrew content.
 - **Provider gap:** The fake provider is intentionally limited to exact tokens. The high-consequence classifier does not yet satisfy the release policy's Hebrew, mixed-script, euphemism, multi-turn, quoted/imported, ambiguity, or urgent-danger matrix.
 - **Accessibility gap:** Automated semantics and representative 200% phone/tablet evidence exist, but manual TalkBack, contrast, and Android print/save-to-PDF review remain pending.
-- **Artifact gap:** Definitive candidate filename, size, digest, signer fingerprint, source commit, install result, and mobile download are pending. This development APK will still use a temporary debug signer and is not an AAB, signed public tag, SBOM, provenance bundle, or approved corpus release.
+- **Artifact gap:** Local APK installation and cold launch pass on API 26 and API 37, and the CI candidate metadata and authenticated draft download are complete. The exact CI bytes still need device installation. This development APK uses a temporary debug signer and is not an AAB, signed public tag, SBOM, provenance bundle, or approved corpus release.
 - **Device gap:** `RELEASE-001` remains open beyond API 26 and the current target. The final representative-device matrix needs human acceptance.
 - **Policy gap:** The development override is acceptable only as a visibly disclosed rehearsal-preview tool. A production rule would require explicit product/editorial review.
-- **Integration risk:** Multiple modules and persistence schemas changed in one working tree. The final full clean and connected runs are required after all shared-file edits settle.
+- **Integration risk:** Multiple modules and persistence schemas changed in one working tree. The settled-tree clean, lint, assembly, policy, connected, and local install/cold-launch gates pass; manual end-to-end, TalkBack, and print-service review remain necessary.
 
 Handoff should include this plan, [the alpha.7 review guide](../releases/0.1.0-alpha.7-review.md), the exact final command output, device reports, screenshots, APK digest, and a list of any deviations. No reviewer should infer completion from code volume or an APK filename.
 
@@ -360,4 +368,4 @@ The implemented slice now demonstrates substantially more of ASEH's intended arc
 
 Implementation of the alpha.7 operational rehearsal is complete and user-testable: Now supplies GPS-confirmed local context and due-work summaries; Practice records preparation; Build exposes the synthetic Self/Household/Qahal workspace rehearsal and the separately persisted service setup; Prayer exposes readiness, explainable assembly, roles, and conductor; Study provides local sources, a development-only verified fake provider, and a signed synthetic pack through the real install/search path. Operational service records live in Room, small interface/service preferences in DataStore, and workspace fixture actions in a versioned local command log.
 
-This plan remains Active while `[PENDING_FINAL_GRADLE_RESULT]`, APK metadata, mobile staging, manual TalkBack/print review, and Gil's artifact review are unresolved. The definitive connected results are `43/43` on API 26 and `44/44` on API 37 at 200% font scale. Rights and editorial decisions also remain open, so closure would describe a verified operational development rehearsal with sacred text explicitly unavailable, not a complete or approved Shabbat service.
+This plan remains Active while exact CI-byte installation, manual TalkBack/print review, and Gil's artifact review are unresolved. The settled build and policy gates pass, the definitive connected results are `43/43` on API 26 and `44/44` on API 37 at 200% font scale, the exact locally built APK installs and cold-launches on both APIs, and the separately signed CI candidate is staged and inspected. Rights and editorial decisions also remain open, so closure would describe a verified operational development rehearsal with sacred text explicitly unavailable, not a complete or approved Shabbat service.
