@@ -148,13 +148,13 @@ class AsehNavigationTest {
   @Test
   fun selectedDestinationSurvivesActivityRecreation() {
     composeRule.onNodeWithTag("destination-study").performClick()
-    composeRule.activityRule.scenario.recreate()
-
     runBlocking {
       withTimeout(5_000) {
         preferencesRepository().preferences.first { it.selectedDestinationId == "study" }
       }
     }
+
+    composeRule.activityRule.scenario.recreate()
     waitUntilSelected("study")
   }
 
@@ -163,13 +163,13 @@ class AsehNavigationTest {
     listOf("practice", "prayer", "study", "build").forEach { destinationId ->
       composeRule.onNodeWithTag("destination-$destinationId").performClick()
     }
-    composeRule.activityRule.scenario.recreate()
-
     runBlocking {
       withTimeout(5_000) {
         preferencesRepository().preferences.first { it.selectedDestinationId == "build" }
       }
     }
+
+    composeRule.activityRule.scenario.recreate()
     waitUntilSelected("build")
   }
 

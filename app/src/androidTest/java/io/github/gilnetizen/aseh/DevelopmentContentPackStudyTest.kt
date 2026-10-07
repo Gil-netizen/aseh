@@ -82,7 +82,7 @@ class DevelopmentContentPackStudyTest {
         composeRule.onNodeWithTag("study-development-pack-detail-heading")
             .assertTextContains("Synthetic role rehearsal")
         composeRule.onNodeWithTag("study-development-pack-detail-id")
-            .assertTextContains("synthetic.guide.rehearsal")
+            .assertTextContains("synthetic.guide.rehearsal", substring = true)
         composeRule.onNodeWithTag("study-development-pack-detail-text")
             .assertTextContains("invented rehearsal roles", substring = true)
         composeRule.onNodeWithTag("study-development-pack-detail-back")

@@ -521,6 +521,7 @@ class ShabbatDemonstratorWorkflowTest {
 
   private fun askAQuestionAndOpenItsExactInstalledSource() {
     selectDestination("study")
+    waitForDevelopmentPackTerminalState()
     composeRule.onNodeWithText("Try an exact-source question")
       .performScrollTo()
       .performClick()
@@ -544,6 +545,19 @@ class ShabbatDemonstratorWorkflowTest {
       .assertTextContains("ASEH rehearsal protocol")
     composeRule.onNodeWithText("Development fixture 1:1")
       .assertIsDisplayed()
+  }
+
+  private fun waitForDevelopmentPackTerminalState() {
+    val terminalTags = listOf(
+      "study-development-pack-ready",
+      "study-development-pack-unsupported",
+      "study-development-pack-failed",
+    )
+    composeRule.waitUntil(timeoutMillis = 20_000) {
+      terminalTags.any { tag ->
+        composeRule.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()
+      }
+    }
   }
 
   private suspend fun resetExperienceState() {
