@@ -3,16 +3,22 @@ package io.github.gilnetizen.aseh.core.database
 import android.content.Context
 import androidx.room.Room
 import java.io.Closeable
+import kotlinx.coroutines.CoroutineScope
 
 /** A closeable owner for operational persistence created by the app root. */
 interface OperationalStore : Closeable {
     val installedPackCatalog: InstalledPackCatalogRepository
+    val experienceStateRepository: ExperienceStateRepository
 }
 
 object OperationalStoreFactory {
-    fun create(context: Context): OperationalStore {
+    fun create(
+        context: Context,
+        scope: CoroutineScope,
+    ): OperationalStore {
+        val appContext = context.applicationContext
         val database = Room.databaseBuilder(
-            context.applicationContext,
+            appContext,
             OperationalDatabase::class.java,
             OPERATIONAL_DATABASE_NAME,
         )
@@ -24,6 +30,10 @@ object OperationalStoreFactory {
             installedPackCatalog = RoomInstalledPackCatalogRepository(
                 database.installedPackCatalogDao(),
             ),
+            experienceStateRepository = RoomExperienceStateRepository(
+                dao = database.experienceStateDao(),
+                preferenceStore = createExperiencePreferencesDataStore(appContext, scope),
+            ),
         )
     }
 }
@@ -31,6 +41,7 @@ object OperationalStoreFactory {
 private class DefaultOperationalStore(
     private val database: OperationalDatabase,
     override val installedPackCatalog: InstalledPackCatalogRepository,
+    override val experienceStateRepository: ExperienceStateRepository,
 ) : OperationalStore {
     override fun close() {
         database.close()

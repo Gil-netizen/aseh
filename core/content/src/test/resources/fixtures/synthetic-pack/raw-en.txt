@@ -1,0 +1,3 @@
+ASEH SYNTHETIC DEVELOPMENT FIXTURE
+This invented sentence exists only to test pack compilation and search.
+The rehearsal team records roles before opening the practice room.

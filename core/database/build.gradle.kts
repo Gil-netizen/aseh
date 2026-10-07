@@ -31,6 +31,7 @@ room {
 }
 
 dependencies {
+    implementation(project(":core:model"))
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     implementation(libs.androidx.datastore.preferences)

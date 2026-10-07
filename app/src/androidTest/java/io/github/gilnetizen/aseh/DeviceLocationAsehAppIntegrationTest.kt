@@ -66,12 +66,15 @@ class DeviceLocationAsehAppIntegrationTest {
         interfacePreferencesRepository = StablePreferencesRepository(),
         manualPlaceContextRepository = placeRepository,
         deviceLocationClient = locationClient,
-        onSelectedDestinationChanged = {},
       )
     }
 
     composeRule.onNodeWithTag("now-set-up-place").performClick()
-    composeRule.onNodeWithTag("now-use-device-location").performClick()
+    composeRule.onNodeWithTag("now-place-editor").assertIsDisplayed()
+    assertEquals(0, locationClient.requestCount)
+    composeRule.onNodeWithTag("now-use-device-location")
+      .performScrollTo()
+      .performClick()
     composeRule.onNodeWithTag("now-location-preview-kind").assertIsDisplayed()
 
     assertNull(placeRepository.saved.value)
@@ -105,12 +108,13 @@ class DeviceLocationAsehAppIntegrationTest {
         interfacePreferencesRepository = StablePreferencesRepository(),
         manualPlaceContextRepository = RecordingPlaceContextRepository(),
         deviceLocationClient = locationClient,
-        onSelectedDestinationChanged = {},
       )
     }
 
     composeRule.onNodeWithTag("now-set-up-place").performClick()
-    composeRule.onNodeWithTag("now-use-device-location").performClick()
+    composeRule.onNodeWithTag("now-use-device-location")
+      .performScrollTo()
+      .performClick()
     composeRule.waitUntil(timeoutMillis = 5_000) { locationClient.started.isCompleted }
 
     composeRule.onNodeWithTag("destination-study").performClick()
@@ -118,7 +122,10 @@ class DeviceLocationAsehAppIntegrationTest {
 
     composeRule.onNodeWithTag("destination-now").performClick()
     composeRule.onNodeWithTag("now-set-up-place").performClick()
-    composeRule.onNodeWithTag("now-use-device-location").assertIsDisplayed()
+    composeRule.onNodeWithTag("now-use-device-location")
+      .performScrollTo()
+      .performClick()
+    composeRule.onNodeWithTag("now-location-progress").assertIsDisplayed()
   }
 
   @Test
@@ -134,14 +141,15 @@ class DeviceLocationAsehAppIntegrationTest {
           interfacePreferencesRepository = StablePreferencesRepository(),
           manualPlaceContextRepository = RecordingPlaceContextRepository(),
           deviceLocationClient = locationClient,
-          onSelectedDestinationChanged = {},
         )
       }
     }
     composeRule.runOnIdle { lifecycleOwner.resume() }
 
     composeRule.onNodeWithTag("now-set-up-place").performClick()
-    composeRule.onNodeWithTag("now-use-device-location").performClick()
+    composeRule.onNodeWithTag("now-use-device-location")
+      .performScrollTo()
+      .performClick()
     composeRule.waitUntil(timeoutMillis = 5_000) { locationClient.started.isCompleted }
 
     composeRule.runOnIdle { lifecycleOwner.stop() }

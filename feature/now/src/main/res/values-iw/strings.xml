@@ -1,9 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="feature_now_functional_review_title">&#x2066;EN · Alpha 7 functional review&#x2069;</string>
+    <string name="feature_now_functional_review_body">&#x2066;EN · This build includes interactive preparation guides, a service chooser and conductor, offline source search, role and reading assignments, local governance records, and packet share/print.&#x2069;</string>
+    <string name="feature_now_functional_open_prayer">&#x2066;EN · Open service conductor&#x2069;</string>
+    <string name="feature_now_functional_open_practice">&#x2066;EN · Open preparation guides&#x2069;</string>
+    <string name="feature_now_functional_open_build">&#x2066;EN · Open workspace tools&#x2069;</string>
     <string name="feature_now_title">&#x2066;EN · Now&#x2069;</string>
-    <string name="feature_now_summary">&#x2066;EN · Use this device’s location to calculate today’s Jewish date and solar times offline.&#x2069;</string>
+    <string name="feature_now_summary">&#x2066;EN · Prepare, rehearse, study, and plan a Shabbat service offline. Device location adds today’s Jewish date and solar times.&#x2069;</string>
     <string name="feature_now_summary_loading">&#x2066;EN · Loading saved place context. Civil date and time remain available offline.&#x2069;</string>
-    <string name="feature_now_summary_place">&#x2066;EN · Jewish date and solar times for the active place, calculated on this device.&#x2069;</string>
+    <string name="feature_now_summary_place">&#x2066;EN · Your Shabbat rehearsal workspace is ready. Date and solar details are calculated on this device.&#x2069;</string>
+    <string name="feature_now_journey_title">&#x2066;EN · Prepare the Shabbat rehearsal&#x2069;</string>
+    <string name="feature_now_journey_scope">&#x2066;EN · Functional review workflow · synthetic evidence fixtures · service text withheld pending an approved licensed edition&#x2069;</string>
+    <string name="feature_now_journey_workspace">&#x2066;EN · Workspace: %1$s&#x2069;</string>
+    <string name="feature_now_journey_progress">&#x2066;EN · Preparation %1$d/%2$d · service %3$d/%4$d&#x2069;</string>
+    <string name="feature_now_journey_next_step">&#x2066;EN · Next required step&#x2069;</string>
+    <string name="feature_now_journey_open_rehearsal">&#x2066;EN · Open service rehearsal&#x2069;</string>
+    <string name="feature_now_journey_open_build">&#x2066;EN · Review team, readings, charter, and export&#x2069;</string>
     <string name="feature_now_civil_date_label">&#x2066;EN · Civil date&#x2069;</string>
     <string name="feature_now_weekday_label">&#x2066;EN · Weekday&#x2069;</string>
     <string name="feature_now_local_time_label">&#x2066;EN · Local time&#x2069;</string>
@@ -41,7 +53,7 @@
     <string name="feature_now_elevation_label">&#x2066;EN · Elevation&#x2069;</string>
     <string name="feature_now_elevation_meters">&#x2066;EN · %1$s meters&#x2069;</string>
     <string name="feature_now_not_set">&#x2066;EN · Not set&#x2069;</string>
-    <string name="feature_now_set_up_place">&#x2066;EN · Set up place&#x2069;</string>
+    <string name="feature_now_set_up_place">&#x2066;EN · Use my location&#x2069;</string>
     <string name="feature_now_change_context">&#x2066;EN · Change context&#x2069;</string>
     <string name="feature_now_refresh_device_location">&#x2066;EN · Refresh device location&#x2069;</string>
     <string name="feature_now_location_options">&#x2066;EN · Location options&#x2069;</string>
@@ -90,4 +102,17 @@
     <string name="feature_now_save_persistence_error">&#x2066;EN · The place context could not be saved on this device. Your draft is still here; try again or cancel.&#x2069;</string>
     <string name="feature_now_clear_persistence_error">&#x2066;EN · The saved place context could not be cleared on this device. Try again or cancel.&#x2069;</string>
     <string name="feature_now_refresh">&#x2066;EN · Refresh date and time&#x2069;</string>
+    <string name="feature_now_services_title">&#x2066;EN · Services and preparation&#x2069;</string>
+    <string name="feature_now_services_context_needed">&#x2066;EN · Confirm place and calendar profile before ASEH schedules services.&#x2069;</string>
+    <string name="feature_now_services_none">&#x2066;EN · No upcoming service was found in the current planning window.&#x2069;</string>
+    <string name="feature_now_services_more">&#x2066;EN · %1$d more upcoming services are available in Pray.&#x2069;</string>
+    <string name="feature_now_service_available">&#x2066;EN · Conducting content available&#x2069;</string>
+    <string name="feature_now_service_planning_only">&#x2066;EN · Planning only&#x2069;</string>
+    <string name="feature_now_service_blocked">&#x2066;EN · Blocked&#x2069;</string>
+    <string name="feature_now_choose_service">&#x2066;EN · Review service plan&#x2069;</string>
+    <string name="feature_now_workspace_title">&#x2066;EN · %1$s work&#x2069;</string>
+    <string name="feature_now_workspace_none_due">&#x2066;EN · No active item is due in the next seven days.&#x2069;</string>
+    <string name="feature_now_workspace_due_count">&#x2066;EN · %1$d active items need attention.&#x2069;</string>
+    <string name="feature_now_workspace_due_item">&#x2066;EN · %1$s · %2$s · %3$s&#x2069;</string>
+    <string name="feature_now_workspace_open">&#x2066;EN · Open workspace&#x2069;</string>
 </resources>

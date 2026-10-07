@@ -92,6 +92,12 @@ but remains open for human architecture and privacy approval:
 
 - [ADR-0007: Foreground device location and local calendar calculations](0007-foreground-location-and-local-calendar.md)
 
+The following proposed record adds the reviewed-code calendar-context boundary
+required to replace synthetic festival overrides, but remains open for human
+architecture and editorial approval:
+
+- [ADR-0008: Local calendar-context engine](0008-local-calendar-context-engine.md)
+
 The Android module layout remains for the scaffolding ExecPlan. Scaffolding may
 depend on the accepted compatibility set in ADR-0005; a demonstrated
 incompatibility requires a superseding ADR.

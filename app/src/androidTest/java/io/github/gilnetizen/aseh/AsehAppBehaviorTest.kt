@@ -47,13 +47,12 @@ class AsehAppBehaviorTest {
         deviceTimeZone = { ZoneOffset.UTC },
         interfacePreferencesRepository = preferencesRepository,
         manualPlaceContextRepository = placeRepository,
-        onSelectedDestinationChanged = {},
       )
     }
 
     composeRule.onNodeWithTag("destination-study").performClick()
     composeRule.onNodeWithTag("destination-study").assertIsSelected()
-    composeRule.onNodeWithTag("app-place-context-action").performClick()
+    composeRule.onNodeWithTag("app-place-context-bar").performClick()
     composeRule.onNodeWithTag("destination-now").assertIsSelected()
     composeRule.onNodeWithTag("now-place-editor").assertIsDisplayed()
 
@@ -112,15 +111,15 @@ class AsehAppBehaviorTest {
       }
     }
 
-    composeRule.onNodeWithTag("app-place-context-action")
+    composeRule.onNodeWithTag("app-place-context-action", useUnmergedTree = true)
       .assertIsDisplayed()
       .assertHeightIsAtLeast(48.dp)
     composeRule.onNodeWithTag("constrained-destination-space")
       .assertIsDisplayed()
       .assertHeightIsAtLeast(48.dp)
-    composeRule.onNodeWithTag("app-place-context-label")
+    composeRule.onNodeWithTag("app-place-context-label", useUnmergedTree = true)
       .assertTextEquals(mixedLabel)
-    composeRule.onNodeWithTag("app-place-context-time-zone")
+    composeRule.onNodeWithTag("app-place-context-time-zone", useUnmergedTree = true)
       .assertTextEquals("Asia/Jerusalem")
   }
 }

@@ -26,7 +26,9 @@ import org.junit.runner.RunWith
 
 /**
  * Exercises the framework location adapter against the emulator's seeded GPS fix.
- * The connected-test runner seeds Jerusalem coordinates before this suite starts.
+ * API 37 installs a shell-owned deterministic provider here. Older emulator images expose no
+ * shell location-provider API, so this verifies their currently available foreground GPS fix;
+ * the connected-test runner may separately seed a known coordinate while a listener is active.
  */
 @RunWith(AndroidJUnit4::class)
 class AndroidDeviceLocationClientInstrumentedTest {
@@ -40,13 +42,17 @@ class AndroidDeviceLocationClientInstrumentedTest {
   fun readsTheCurrentSeededGpsFix() = runBlocking {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val scenario = ActivityScenario.launch(MainActivity::class.java)
+    val usesApi37TestProvider = Build.VERSION.SDK_INT >= 37
 
     val outcome = try {
-      if (Build.VERSION.SDK_INT >= 37) {
-        refreshApi37TestProviderLocation()
+      if (usesApi37TestProvider) {
+        installApi37TestProviderLocation()
       }
       AndroidDeviceLocationClient(context).getCurrentLocation()
     } finally {
+      if (usesApi37TestProvider) {
+        removeApi37TestProvider()
+      }
       scenario.close()
     }
 
@@ -55,8 +61,15 @@ class AndroidDeviceLocationClientInstrumentedTest {
       outcome is DeviceLocationOutcome.Success,
     )
     val fix = (outcome as DeviceLocationOutcome.Success).fix
-    assertEquals(31.778, fix.latitudeDegrees, 0.02)
-    assertEquals(35.235, fix.longitudeDegrees, 0.02)
+    if (usesApi37TestProvider) {
+      assertEquals(31.778, fix.latitudeDegrees, 0.02)
+      assertEquals(35.235, fix.longitudeDegrees, 0.02)
+    } else {
+      assertTrue(fix.latitudeDegrees.isFinite())
+      assertTrue(fix.latitudeDegrees in -90.0..90.0)
+      assertTrue(fix.longitudeDegrees.isFinite())
+      assertTrue(fix.longitudeDegrees in -180.0..180.0)
+    }
   }
 
   @Test
@@ -90,13 +103,31 @@ class AndroidDeviceLocationClientInstrumentedTest {
     elapsedRealtimeNanos = SystemClock.elapsedRealtimeNanos()
   }
 
-  private fun refreshApi37TestProviderLocation() {
+  private fun installApi37TestProviderLocation() {
+    runShellCommand("appops set 2000 android:mock_location allow")
+    runShellCommand("cmd location providers remove-test-provider gps")
+    runShellCommand(
+      "cmd location providers add-test-provider gps " +
+        "--requiresSatellite --supportsAltitude",
+    )
+    runShellCommand("cmd location providers set-test-provider-enabled gps true")
+    runShellCommand(
+      "cmd location providers set-test-provider-location gps " +
+        "--location 31.778,35.235 --accuracy 5",
+    )
+  }
+
+  private fun removeApi37TestProvider() {
+    runShellCommand("cmd location providers remove-test-provider gps", assertSuccess = false)
+    runShellCommand("appops set 2000 android:mock_location default", assertSuccess = false)
+  }
+
+  private fun runShellCommand(command: String, assertSuccess: Boolean = true) {
     val output = ParcelFileDescriptor.AutoCloseInputStream(
-      InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(
-        "cmd location providers set-test-provider-location gps " +
-          "--location 31.778,35.235 --accuracy 5",
-      ),
+      InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(command),
     ).bufferedReader().use { it.readText() }
-    assertTrue("Unable to refresh the API 37 GPS test provider: $output", output.isBlank())
+    if (assertSuccess) {
+      assertTrue("Shell command failed: $command\n$output", output.isBlank())
+    }
   }
 }

@@ -29,6 +29,7 @@ android {
 
 dependencies {
     implementation(project(":core:ui"))
+    implementation(project(":domain:servicecatalog"))
     implementation(project(":domain:zmanim"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)

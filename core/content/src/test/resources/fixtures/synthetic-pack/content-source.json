@@ -1,0 +1,154 @@
+{
+  "schemaVersion": 1,
+  "identity": {
+    "packId": "aseh.synthetic.rehearsal",
+    "version": "1.0.0",
+    "packType": "org.aseh/dev-fixture"
+  },
+  "compatibility": {
+    "packSchema": 1,
+    "contentSchema": 1,
+    "minAppSchema": 1,
+    "maxAppSchema": 1
+  },
+  "dependencies": [],
+  "provenance": {
+    "sourceTreeSha256": "364bdfdaf68eeb16685925c19a1f260a32ce65ff25367b932b6073a7ddd257a7",
+    "retrievedAt": "2026-10-07T00:00:00Z",
+    "transformations": [
+      "Synthetic test records parsed from typed JSON",
+      "Unicode text retained; normalized search field supplied explicitly",
+      "SQLite and FTS rows emitted in stable identifier order"
+    ]
+  },
+  "review": {
+    "state": "Drafted",
+    "reviewer": null,
+    "reviewedAt": null
+  },
+  "rights": {
+    "licenseLabel": "CC-BY-SA-4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "attribution": "ASEH synthetic development fixture",
+    "notice": "Invented test content; not a religious source or instruction.",
+    "redistributionAllowed": true,
+    "derivativesAllowed": true,
+    "commercialUseAllowed": true,
+    "rightsReviewed": false
+  },
+  "editions": [
+    {
+      "editionId": "synthetic_fixture_en",
+      "workId": "synthetic_rehearsal_record",
+      "language": "en",
+      "script": "Latn",
+      "versionTitle": "Synthetic English development fixture v1",
+      "editionTitle": "Invented rehearsal record",
+      "contributor": "ASEH test suite",
+      "sourceUrl": "https://example.invalid/aseh/synthetic-fixture/en",
+      "rawSha256": "852f0a7e2f1d808477dbb4483c75fb563b17fa24936ad3af8c1aecc12ab8bc3d",
+      "rights": {
+        "licenseLabel": "CC-BY-SA-4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+        "attribution": "ASEH synthetic development fixture",
+        "notice": "Invented English test content; not a religious source or instruction.",
+        "redistributionAllowed": true,
+        "derivativesAllowed": true,
+        "commercialUseAllowed": true,
+        "rightsReviewed": false
+      },
+      "review": {
+        "state": "Drafted",
+        "reviewer": null,
+        "reviewedAt": null
+      }
+    },
+    {
+      "editionId": "synthetic_fixture_he",
+      "workId": "synthetic_rehearsal_record",
+      "language": "he",
+      "script": "Hebr",
+      "versionTitle": "Synthetic Hebrew development fixture v1",
+      "editionTitle": "Invented test record",
+      "contributor": "ASEH test suite",
+      "sourceUrl": "https://example.invalid/aseh/synthetic-fixture/he",
+      "rawSha256": "c23da05f891dcdfce6e3d1f3e3ad608fb5a239d7f84a891402bce728353188a3",
+      "rights": {
+        "licenseLabel": "CC-BY-SA-4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+        "attribution": "ASEH synthetic development fixture",
+        "notice": "Invented Hebrew test content; not a religious source or instruction.",
+        "redistributionAllowed": true,
+        "derivativesAllowed": true,
+        "commercialUseAllowed": true,
+        "rightsReviewed": false
+      },
+      "review": {
+        "state": "Drafted",
+        "reviewer": null,
+        "reviewedAt": null
+      }
+    }
+  ],
+  "documents": [
+    {
+      "contentId": "synthetic.source.roles.en",
+      "kind": "source-unit",
+      "language": "en",
+      "script": "Latn",
+      "title": "Synthetic rehearsal source",
+      "body": "The rehearsal team records roles before opening the practice room.",
+      "normalizedBody": "the rehearsal team records roles before opening the practice room",
+      "editionId": "synthetic_fixture_en",
+      "locator": "fixture:en:3",
+      "reviewState": "Drafted",
+      "prerequisiteContentIds": [],
+      "claims": []
+    },
+    {
+      "contentId": "synthetic.source.roles.he",
+      "kind": "source-unit",
+      "language": "he",
+      "script": "Hebr",
+      "title": "מקור בדיקה מלאכותי",
+      "body": "זהו טקסט בדיקה מלאכותי בלבד. צוות הבדיקה רושם תפקידים.",
+      "normalizedBody": "זהו טקסט בדיקה מלאכותי בלבד צוות הבדיקה רושם תפקידים",
+      "editionId": "synthetic_fixture_he",
+      "locator": "fixture:he:2",
+      "reviewState": "Drafted",
+      "prerequisiteContentIds": [],
+      "claims": []
+    },
+    {
+      "contentId": "synthetic.guide.rehearsal",
+      "kind": "development-fixture",
+      "language": "en",
+      "script": "Latn",
+      "title": "Synthetic role rehearsal",
+      "body": "For this software test, record the invented rehearsal roles and verify the offline search result.",
+      "normalizedBody": "for this software test record the invented rehearsal roles and verify the offline search result",
+      "editionId": null,
+      "locator": null,
+      "reviewState": "Drafted",
+      "prerequisiteContentIds": [
+        "synthetic.source.roles.en"
+      ],
+      "claims": [
+        {
+          "claimId": "synthetic.claim.roles-recorded",
+          "text": "The synthetic fixture says the rehearsal team records roles.",
+          "conclusionStatus": "EXPLICIT",
+          "reviewState": "Drafted",
+          "citations": [
+            {
+              "sourceUnitId": "synthetic.source.roles.en",
+              "relation": "explicit"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "attributionText": "ASEH synthetic development fixture. Invented solely for software tests.",
+  "licenseText": "Synthetic original ASEH test content: CC BY-SA 4.0. No sacred, liturgical, or Torah text is present."
+}
