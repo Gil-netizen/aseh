@@ -3,17 +3,24 @@ package io.github.gilnetizen.aseh
 import android.Manifest
 import android.content.Intent
 import android.os.Build
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.v2.AndroidComposeTestRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.rules.ActivityScenarioRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -55,6 +62,32 @@ class DevelopmentContentPackStudyTest {
 
         waitForTag("study-development-pack-ready")
         composeRule.onNodeWithTag("study-development-pack-ready").assertIsDisplayed()
+        waitForTag("study-development-pack-hit-synthetic.guide.rehearsal")
+        val rehearsalResult = composeRule.onNodeWithTag(
+            "study-development-pack-hit-synthetic.guide.rehearsal",
+        )
+        rehearsalResult
+            .performScrollTo()
+            .assertIsDisplayed()
+            .assertHasClickAction()
+            .assertHeightIsAtLeast(48.dp)
+        assertEquals(
+            Role.Button,
+            rehearsalResult.fetchSemanticsNode().config[SemanticsProperties.Role],
+        )
+        rehearsalResult.performClick()
+        composeRule.onNodeWithTag("study-development-pack-detail-synthetic.guide.rehearsal")
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule.onNodeWithTag("study-development-pack-detail-heading")
+            .assertTextContains("Synthetic role rehearsal")
+        composeRule.onNodeWithTag("study-development-pack-detail-id")
+            .assertTextContains("synthetic.guide.rehearsal")
+        composeRule.onNodeWithTag("study-development-pack-detail-text")
+            .assertTextContains("invented rehearsal roles", substring = true)
+        composeRule.onNodeWithTag("study-development-pack-detail-back")
+            .performScrollTo()
+            .performClick()
         waitForTag("study-development-pack-hit-synthetic.guide.rehearsal")
 
         composeRule.onNodeWithText("תפקידים", substring = true)

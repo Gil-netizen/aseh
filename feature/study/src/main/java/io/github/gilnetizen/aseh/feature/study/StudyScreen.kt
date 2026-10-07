@@ -290,6 +290,7 @@ private fun DevelopmentContentPackCard(runtime: DevelopmentContentPackRuntime) {
     var query by rememberSaveable { mutableStateOf("rehearsal") }
     var requestId by rememberSaveable { mutableStateOf(0) }
     var submittedQuery by rememberSaveable { mutableStateOf("rehearsal") }
+    var selectedHitId by rememberSaveable { mutableStateOf<String?>(null) }
     var state by remember(runtime) {
         mutableStateOf<DevelopmentContentPackUiState>(DevelopmentContentPackUiState.Loading)
     }
@@ -300,6 +301,11 @@ private fun DevelopmentContentPackCard(runtime: DevelopmentContentPackRuntime) {
         }
         state = runtime.load(submittedQuery)
     }
+
+    val selectedHit = (state as? DevelopmentContentPackUiState.Ready)
+        ?.hits
+        ?.firstOrNull { hit -> hit.contentId == selectedHitId }
+    BackHandler(enabled = selectedHit != null) { selectedHitId = null }
 
     Surface(
         shape = MaterialTheme.shapes.large,
@@ -381,64 +387,82 @@ private fun DevelopmentContentPackCard(runtime: DevelopmentContentPackRuntime) {
                         text = "Search runs against the verified pack's local SQLite FTS index. No network is used.",
                         style = MaterialTheme.typography.bodyMedium,
                     )
-                    OutlinedTextField(
-                        value = query,
-                        onValueChange = { query = it },
-                        label = { Text("Search verified pack") },
-                        supportingText = { Text("Try an English word, Hebrew word, or exact locator") },
-                        singleLine = true,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("study-development-pack-query"),
-                    )
-                    Button(
-                        onClick = {
-                            submittedQuery = query.trim()
-                            requestId += 1
-                        },
-                        enabled = query.isNotBlank(),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 48.dp)
-                            .testTag("study-development-pack-search"),
-                    ) {
-                        Text("Search offline pack")
-                    }
-                    listOf(
-                        "rehearsal" to "Search sample: rehearsal",
-                        "תפקידים" to "Search sample: \u2068תפקידים\u2069",
-                        "fixture:en:3" to "Search sample: fixture:en:3",
-                    ).forEach { (sample, label) ->
-                        OutlinedButton(
-                            onClick = {
-                                query = sample
-                                submittedQuery = sample
-                                requestId += 1
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = 48.dp),
-                        ) {
-                            Text(label)
-                        }
-                    }
-
-                    Text(
-                        text = if (current.hits.size == 1) "1 verified result" else "${current.hits.size} verified results",
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.semantics { heading() },
-                    )
-                    if (current.hits.isEmpty()) {
-                        Text(
-                            text = if (current.query.isBlank()) {
-                                "Enter a search term."
-                            } else {
-                                "No record in this verified fixture matches “${current.query}”."
-                            },
-                            modifier = Modifier.testTag("study-development-pack-no-results"),
+                    if (selectedHit != null) {
+                        DevelopmentPackSearchResultDetail(
+                            hit = selectedHit,
+                            packId = current.packId,
+                            version = current.version,
+                            manifestSha256 = current.manifestSha256,
+                            signingKeyId = current.signingKeyId,
+                            onBack = { selectedHitId = null },
                         )
                     } else {
-                        current.hits.forEach { hit -> DevelopmentPackSearchResult(hit) }
+                        OutlinedTextField(
+                            value = query,
+                            onValueChange = { query = it },
+                            label = { Text("Search verified pack") },
+                            supportingText = { Text("Try an English word, Hebrew word, or exact locator") },
+                            singleLine = true,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("study-development-pack-query"),
+                        )
+                        Button(
+                            onClick = {
+                                selectedHitId = null
+                                submittedQuery = query.trim()
+                                requestId += 1
+                            },
+                            enabled = query.isNotBlank(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 48.dp)
+                                .testTag("study-development-pack-search"),
+                        ) {
+                            Text("Search offline pack")
+                        }
+                        listOf(
+                            "rehearsal" to "Search sample: rehearsal",
+                            "תפקידים" to "Search sample: \u2068תפקידים\u2069",
+                            "fixture:en:3" to "Search sample: fixture:en:3",
+                        ).forEach { (sample, label) ->
+                            OutlinedButton(
+                                onClick = {
+                                    selectedHitId = null
+                                    query = sample
+                                    submittedQuery = sample
+                                    requestId += 1
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 48.dp),
+                            ) {
+                                Text(label)
+                            }
+                        }
+
+                        Text(
+                            text = if (current.hits.size == 1) "1 verified result" else "${current.hits.size} verified results",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.semantics { heading() },
+                        )
+                        if (current.hits.isEmpty()) {
+                            Text(
+                                text = if (current.query.isBlank()) {
+                                    "Enter a search term."
+                                } else {
+                                    "No record in this verified fixture matches “${current.query}”."
+                                },
+                                modifier = Modifier.testTag("study-development-pack-no-results"),
+                            )
+                        } else {
+                            current.hits.forEach { hit ->
+                                DevelopmentPackSearchResult(
+                                    hit = hit,
+                                    onOpen = { selectedHitId = hit.contentId },
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -447,13 +471,22 @@ private fun DevelopmentContentPackCard(runtime: DevelopmentContentPackRuntime) {
 }
 
 @Composable
-private fun DevelopmentPackSearchResult(hit: DevelopmentContentSearchHit) {
+private fun DevelopmentPackSearchResult(
+    hit: DevelopmentContentSearchHit,
+    onOpen: () -> Unit,
+) {
     Surface(
         color = MaterialTheme.colorScheme.surfaceVariant,
         contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
         shape = MaterialTheme.shapes.medium,
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .clickable(
+                onClickLabel = "Open verified pack result",
+                role = Role.Button,
+                onClick = onOpen,
+            )
             .testTag("study-development-pack-hit-${hit.contentId}"),
     ) {
         Column(
@@ -468,7 +501,92 @@ private fun DevelopmentPackSearchResult(hit: DevelopmentContentSearchHit) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.primary,
             )
+            Text(
+                text = "Open verified record",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+            )
         }
+    }
+}
+
+@Composable
+private fun DevelopmentPackSearchResultDetail(
+    hit: DevelopmentContentSearchHit,
+    packId: String,
+    version: String,
+    manifestSha256: String,
+    signingKeyId: String,
+    onBack: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("study-development-pack-detail-${hit.contentId}"),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        OutlinedButton(
+            onClick = onBack,
+            modifier = Modifier
+                .heightIn(min = 48.dp)
+                .testTag("study-development-pack-detail-back"),
+        ) {
+            Text("Back to verified results")
+        }
+        Text(
+            text = "Verified pack record",
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Text(
+            text = hit.title,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier
+                .testTag("study-development-pack-detail-heading")
+                .semantics { heading() },
+        )
+        Text(
+            text = "Content ID: ${hit.contentId}",
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.testTag("study-development-pack-detail-id"),
+        )
+        Text("${hit.kind} · ${hit.language}")
+        hit.locator?.let { locator -> Text("Locator: $locator") }
+        Text(
+            text = "Matching excerpt",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+        )
+        SelectionContainer {
+            Text(
+                text = hit.snippet,
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.testTag("study-development-pack-detail-text"),
+            )
+        }
+        Surface(
+            color = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            shape = MaterialTheme.shapes.medium,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                text = "This record was read from the signature-verified development fixture. " +
+                    "It remains invented software-test content with Drafted editorial status, " +
+                    "not sacred text or religious instruction.",
+                modifier = Modifier.padding(12.dp),
+            )
+        }
+        Text(
+            text = "Pack $packId · version $version",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        Text(
+            text = "Manifest $manifestSha256 · signing key $signingKeyId",
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.testTag("study-development-pack-detail-provenance"),
+        )
     }
 }
 
