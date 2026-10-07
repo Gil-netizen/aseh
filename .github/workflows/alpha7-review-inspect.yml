@@ -1,0 +1,72 @@
+name: Inspect alpha 7 review asset
+
+on:
+  push:
+    branches:
+      - codex/shabbat-rehearsal-alpha7
+    paths:
+      - .github/workflows/alpha7-review-inspect.yml
+
+permissions:
+  contents: write
+
+jobs:
+  inspect:
+    name: Verify uploaded review APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Set up Android build tools
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+        with:
+          cmdline-tools-version: '15859902'
+          accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: false
+          packages: >-
+            platform-tools build-tools;37.0.0
+
+      - name: Download and inspect uploaded APK
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          apk='ASEH-0.1.0-alpha.7-dev-debug.apk'
+          curl --fail-with-body --silent --show-error --location             --header "Authorization: Bearer $GH_TOKEN"             --header "Accept: application/octet-stream"             --header "X-GitHub-Api-Version: 2022-11-28"             'https://api.github.com/repos/Gil-netizen/aseh/releases/assets/617364346'             --output "$apk"
+
+          "$ANDROID_SDK_ROOT/build-tools/37.0.0/apksigner" verify --verbose --print-certs "$apk" 2>&1 | tee APK-SIGNATURE.txt
+          "$ANDROID_SDK_ROOT/build-tools/37.0.0/aapt2" dump badging "$apk" | head -n 3 | tee APK-BADGING.txt
+
+          signer="$(sed -n 's/.*certificate SHA-256 digest:[[:space:]]*//Ip' APK-SIGNATURE.txt | head -n 1)"
+          test -n "$signer"
+          sha="$(sha256sum "$apk" | awk '{print $1}')"
+          test "$sha" = 'c0ca3fddaf1475c5b070c7b6fe76510030e953a11c2d70c7528d17c57134bebc'
+          size="$(stat -c%s "$apk")"
+          test "$size" = '15477164'
+          package_line="$(head -n 1 APK-BADGING.txt)"
+          grep -Fq "name='io.github.gilnetizen.aseh.dev.alpha7.debug'" <<< "$package_line"
+          grep -Fq "versionCode='7'" <<< "$package_line"
+          grep -Fq "versionName='0.1.0-alpha.7-dev-debug'" <<< "$package_line"
+
+          {
+            printf 'source_revision=%s\n' '5b0fa9f232214adedc6ac2d243fb798a8c3700e2'
+            printf 'filename=%s\n' "$apk"
+            printf 'size_bytes=%s\n' "$size"
+            printf 'sha256=%s\n' "$sha"
+            printf 'signer_sha256=%s\n' "$signer"
+            printf 'package=io.github.gilnetizen.aseh.dev.alpha7.debug\n'
+            printf 'version_code=7\n'
+            printf 'version_name=0.1.0-alpha.7-dev-debug\n'
+            printf 'release_id=405316778\n'
+            printf 'release_state=draft-unpublished\n'
+          } | tee BUILD-METADATA.txt
+
+      - name: Replace incomplete metadata asset
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error --location             --request DELETE             --header "Authorization: Bearer $GH_TOKEN"             --header "Accept: application/vnd.github+json"             --header "X-GitHub-Api-Version: 2022-11-28"             'https://api.github.com/repos/Gil-netizen/aseh/releases/assets/617364382'
+
+          curl --fail-with-body --silent --show-error --location             --request POST             --header "Authorization: Bearer $GH_TOKEN"             --header "Accept: application/vnd.github+json"             --header "X-GitHub-Api-Version: 2022-11-28"             --header "Content-Type: text/plain"             --data-binary '@BUILD-METADATA.txt'             'https://uploads.github.com/repos/Gil-netizen/aseh/releases/405316778/assets?name=BUILD-METADATA.txt'
