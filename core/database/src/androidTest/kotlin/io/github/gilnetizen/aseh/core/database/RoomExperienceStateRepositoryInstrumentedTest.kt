@@ -15,6 +15,7 @@ import io.github.gilnetizen.aseh.core.model.ExperienceState
 import io.github.gilnetizen.aseh.core.model.ParticipantRole
 import io.github.gilnetizen.aseh.core.model.ReadingPlanEntry
 import io.github.gilnetizen.aseh.core.model.ReadingPreparationStatus
+import io.github.gilnetizen.aseh.core.model.ServiceInstanceKey
 import io.github.gilnetizen.aseh.core.model.WorkspaceKind
 import java.io.File
 import java.io.IOException
@@ -67,7 +68,7 @@ class RoomExperienceStateRepositoryInstrumentedTest {
     fun completeStateSurvivesDatabaseAndRepositoryRestart() = runTest {
         val firstStore = preferenceStore(preferenceScope)
         val first = RoomExperienceStateRepository(database.experienceStateDao(), firstStore)
-        first.activateServiceInstance(SERVICE_DATE)
+        first.activateServiceInstance(SERVICE_INSTANCE)
         first.setWorkspace("  Kehillah rehearsal  ", WorkspaceKind.QAHAL)
         first.setSelectedRole(ParticipantRole.GABBAI)
         first.setSelectedServicePlan("dev.service.shabbat.morning@2026-10-10")
@@ -126,6 +127,7 @@ class RoomExperienceStateRepositoryInstrumentedTest {
         ).state.first()
 
         assertEquals("Kehillah rehearsal", restored.workspaceName)
+        assertEquals(SERVICE_INSTANCE.occurrenceId, restored.serviceInstanceId)
         assertEquals(SERVICE_DATE, restored.serviceInstanceDate)
         assertEquals(ParticipantRole.GABBAI, restored.selectedRole)
         assertEquals(
@@ -238,7 +240,7 @@ class RoomExperienceStateRepositoryInstrumentedTest {
     fun resetAndDeleteAllAffectTheIntendedRoomAndPreferenceRecords() = runTest {
         val store = preferenceStore(preferenceScope)
         val repository = RoomExperienceStateRepository(database.experienceStateDao(), store)
-        repository.activateServiceInstance(SERVICE_DATE)
+        repository.activateServiceInstance(SERVICE_INSTANCE)
         repository.setWorkspace("Household", WorkspaceKind.HOUSEHOLD)
         repository.setSelectedRole(ParticipantRole.READER)
         repository.setPracticeStepCompleted("practice.access.path", true)
@@ -271,12 +273,18 @@ class RoomExperienceStateRepositoryInstrumentedTest {
     }
 
     @Test
-    fun serviceDateRolloverClearsWeeklyAssignmentsAndProgressButKeepsDurableRecords() = runTest {
+    fun sameDateDifferentProfileOccurrencesKeepProgressIsolated() = runTest {
         val repository = RoomExperienceStateRepository(
             database.experienceStateDao(),
             preferenceStore(preferenceScope),
         )
-        repository.activateServiceInstance(SERVICE_DATE)
+        val israel = SERVICE_INSTANCE
+        val diaspora = ServiceInstanceKey(
+            "dev.service.shabbat.morning@2026-10-10#dev.opinion.diaspora",
+            SERVICE_DATE,
+        )
+
+        repository.activateServiceInstance(israel)
         repository.setWorkspace("Harimon", WorkspaceKind.QAHAL)
         repository.setPracticeCardSaved("practice.saved", true)
         repository.setSourceBookmarked("source.saved", true)
@@ -294,36 +302,103 @@ class RoomExperienceStateRepositoryInstrumentedTest {
             ),
         )
 
+        repository.activateServiceInstance(diaspora)
+        val diasporaInitially = repository.state.first()
+
+        assertEquals(diaspora, diasporaInitially.serviceInstanceKey)
+        assertTrue(diasporaInitially.completedPracticeStepIds.isEmpty())
+        assertTrue(diasporaInitially.completedPreflightStepIds.isEmpty())
+        assertTrue(diasporaInitially.completedServiceSegmentIds.isEmpty())
+        assertTrue(diasporaInitially.roleAssignments.isEmpty())
+        assertTrue(diasporaInitially.readingPlans.isEmpty())
+        repository.setPracticeStepCompleted("practice.diaspora", true)
+        repository.setRoleAssignment(ParticipantRole.LEADER, "Leah")
+
+        repository.activateServiceInstance(israel)
+        val restoredIsrael = repository.state.first()
+
+        assertEquals(israel, restoredIsrael.serviceInstanceKey)
+        assertEquals(setOf("practice.weekly"), restoredIsrael.completedPracticeStepIds)
+        assertEquals(setOf("preflight.weekly"), restoredIsrael.completedPreflightStepIds)
+        assertEquals(setOf("segment.weekly"), restoredIsrael.completedServiceSegmentIds)
+        assertEquals("Ari", restoredIsrael.roleAssignments[ParticipantRole.LEADER])
+        assertEquals("Miriam", restoredIsrael.readingPlans["reading.aliyah.1"]?.assignee)
+        assertEquals("Harimon", restoredIsrael.workspaceName)
+        assertEquals(setOf("practice.saved"), restoredIsrael.savedPracticeCardIds)
+        assertEquals(setOf("source.saved"), restoredIsrael.bookmarkedSourceIds)
+
+        repository.activateServiceInstance(diaspora)
+        val restoredDiaspora = repository.state.first()
+        assertEquals(setOf("practice.diaspora"), restoredDiaspora.completedPracticeStepIds)
+        assertEquals("Leah", restoredDiaspora.roleAssignments[ParticipantRole.LEADER])
+        assertTrue(restoredDiaspora.completedServiceSegmentIds.isEmpty())
+    }
+
+    @Test
+    fun switchingDatesPreservesEachOccurrenceAndRejectsDelayedWrites() = runTest {
+        val repository = RoomExperienceStateRepository(
+            database.experienceStateDao(),
+            preferenceStore(preferenceScope),
+        )
+        val first = SERVICE_INSTANCE
         val nextDate = SERVICE_DATE.plusWeeks(1)
-        repository.activateServiceInstance(nextDate)
-        val rolled = repository.state.first()
+        val second = ServiceInstanceKey(
+            "dev.service.shabbat.morning@2026-10-17#dev.opinion.israel",
+            nextDate,
+        )
 
-        assertEquals(nextDate, rolled.serviceInstanceDate)
-        assertTrue(rolled.completedPracticeStepIds.isEmpty())
-        assertTrue(rolled.completedPreflightStepIds.isEmpty())
-        assertTrue(rolled.completedServiceSegmentIds.isEmpty())
-        assertTrue(rolled.roleAssignments.isEmpty())
-        assertTrue(rolled.readingAssignments.isEmpty())
-        assertTrue(rolled.readingPlans.isEmpty())
-        assertEquals("Harimon", rolled.workspaceName)
-        assertEquals(setOf("practice.saved"), rolled.savedPracticeCardIds)
-        assertEquals(setOf("source.saved"), rolled.bookmarkedSourceIds)
-        assertEquals(completeCharter(), rolled.communityCharter)
-        assertEquals(setOf("dossier.fact.saved"), rolled.reviewedDossierFactIds)
+        repository.activateServiceInstance(first)
+        repository.setServiceSegmentCompleted("segment.first", true)
+        repository.setRoleAssignment(ParticipantRole.LEADER, "Ari")
+        repository.activateServiceInstance(second)
+        val secondInitially = repository.state.first()
 
-        repository.setServiceSegmentCompleted(SERVICE_DATE, "segment.delayed-old-write", true)
+        assertEquals(second, secondInitially.serviceInstanceKey)
+        assertTrue(secondInitially.completedServiceSegmentIds.isEmpty())
+        assertTrue(secondInitially.roleAssignments.isEmpty())
+        repository.setServiceSegmentCompleted("segment.second", true)
+
+        repository.setServiceSegmentCompleted(first, "segment.delayed-old-write", true)
         val afterDelayedWrite = repository.state.first()
-        assertEquals(nextDate, afterDelayedWrite.serviceInstanceDate)
-        assertTrue(afterDelayedWrite.completedServiceSegmentIds.isEmpty())
+        assertEquals(second, afterDelayedWrite.serviceInstanceKey)
+        assertEquals(setOf("segment.second"), afterDelayedWrite.completedServiceSegmentIds)
 
+        repository.activateServiceInstance(first)
+        val restoredFirst = repository.state.first()
+        assertEquals(setOf("segment.first"), restoredFirst.completedServiceSegmentIds)
+        assertEquals("Ari", restoredFirst.roleAssignments[ParticipantRole.LEADER])
+
+        repository.activateServiceInstance(second)
+        assertEquals(
+            setOf("segment.second"),
+            repository.state.first().completedServiceSegmentIds,
+        )
+    }
+
+    @Test
+    fun unsupportedSelectionDeactivatesOccurrenceAndRejectsQueuedOldWrite() = runTest {
+        val repository = RoomExperienceStateRepository(
+            database.experienceStateDao(),
+            preferenceStore(preferenceScope),
+        )
+
+        repository.activateServiceInstance(SERVICE_INSTANCE)
+        repository.setServiceSegmentCompleted("segment.before-selection-change", true)
+        repository.deactivateServiceInstance()
+
+        assertEquals(null, repository.state.first().serviceInstanceKey)
         repository.setServiceSegmentCompleted(
-            nextDate.plusWeeks(1),
-            "segment.delayed-future-write",
+            SERVICE_INSTANCE,
+            "segment.queued-after-unsupported-selection",
             true,
         )
-        val afterFutureWrite = repository.state.first()
-        assertEquals(nextDate, afterFutureWrite.serviceInstanceDate)
-        assertTrue(afterFutureWrite.completedServiceSegmentIds.isEmpty())
+        assertEquals(null, repository.state.first().serviceInstanceKey)
+
+        repository.activateServiceInstance(SERVICE_INSTANCE)
+        assertEquals(
+            setOf("segment.before-selection-change"),
+            repository.state.first().completedServiceSegmentIds,
+        )
     }
 
     private fun openDatabase(): OperationalDatabase = Room.databaseBuilder(
@@ -372,6 +447,10 @@ class RoomExperienceStateRepositoryInstrumentedTest {
 
     private companion object {
         val SERVICE_DATE: LocalDate = LocalDate.of(2026, 10, 10)
+        val SERVICE_INSTANCE = ServiceInstanceKey(
+            "dev.service.shabbat.morning@2026-10-10#dev.opinion.israel",
+            SERVICE_DATE,
+        )
     }
 }
 

@@ -69,6 +69,8 @@ import io.github.gilnetizen.aseh.core.ui.PacketExportPreviewDialog
 @Composable
 fun BuildScreen(
     catalog: DemonstratorCatalog? = null,
+    serviceOccurrenceSupported: Boolean = true,
+    serviceOccurrenceActivating: Boolean = false,
     state: ExperienceState = ExperienceState(),
     dateLabel: String = "Next Shabbat",
     locationLabel: String = "Location not set",
@@ -104,14 +106,15 @@ fun BuildScreen(
     }
     var pendingPacketExport by rememberSaveable { mutableStateOf<String?>(null) }
     var showDeleteConfirmation by rememberSaveable { mutableStateOf(false) }
+    val rehearsalCatalog = catalog.takeIf { serviceOccurrenceSupported }
     var selectedStageName by rememberSaveable {
-        mutableStateOf(recommendedBuildStage(state, catalog).name)
+        mutableStateOf(recommendedBuildStage(state, rehearsalCatalog).name)
     }
     val selectedStage = BuildStage.valueOf(selectedStageName)
     val screenScrollState = rememberScrollState()
     val workspaceKind = WorkspaceKind.valueOf(workspaceKindName)
-    val practice = catalog?.let { practiceProgress(it, state) }
-    val assembly = catalog?.let { activeCatalog ->
+    val practice = rehearsalCatalog?.let { practiceProgress(it, state) }
+    val assembly = rehearsalCatalog?.let { activeCatalog ->
         if (assemblyContext != null) {
             assembleService(activeCatalog, state, assemblyContext)
         } else {
@@ -123,7 +126,7 @@ fun BuildScreen(
         assembledSegmentIds.count(state.completedServiceSegmentIds::contains) to
             assembledSegmentIds.size
     }
-    val packetPayload = catalog?.let { activeCatalog ->
+    val packetPayload = rehearsalCatalog?.let { activeCatalog ->
         if (assemblyContext != null) {
             buildServicePacket(activeCatalog, state, assemblyContext)
         } else {
@@ -170,19 +173,24 @@ fun BuildScreen(
             }
         }
 
-        if (catalog != null) {
+        if (catalog != null && serviceOccurrenceSupported) {
             NoticeCard(catalog.noticeTitle, catalog.noticeBody)
+        } else if (catalog != null && serviceOccurrenceActivating) {
+            NoticeCard(
+                title = "Activating selected service",
+                body = "ASEH is loading this dated occurrence from local storage. Assignment and packet controls will appear when it is ready.",
+            )
         } else {
             NoticeCard(
-                title = "No reviewed content pack installed",
-                body = "Workspace and role assignments remain available. Install an approved pack before generating a service packet.",
+                title = "Service setup unavailable",
+                body = "Workspace and local-data settings remain available. Install the required local content and select a rehearsal-capable occurrence before editing assignments or generating a packet.",
             )
         }
 
         BuildStageSelector(
             selectedStage = selectedStage,
             state = state,
-            catalog = catalog,
+            catalog = rehearsalCatalog,
             assembly = assembly,
             onStageSelected = { selectedStageName = it.name },
         )
@@ -242,7 +250,7 @@ fun BuildScreen(
             }
         }
 
-        if (selectedStage == BuildStage.TEAM_AND_READINGS) {
+        if (selectedStage == BuildStage.TEAM_AND_READINGS && rehearsalCatalog != null) {
             SectionCard(title = "Rehearsal team") {
             Text(
                 text = "Names are operational assignments for this rehearsal. They make no statement about religious eligibility or office.",
@@ -269,7 +277,7 @@ fun BuildScreen(
                 )
             }
 
-            if (selectedStage == BuildStage.TEAM_AND_READINGS) {
+            if (selectedStage == BuildStage.TEAM_AND_READINGS && serviceOccurrenceSupported) {
                 SectionCard(title = "Torah-reading assignments") {
                 Text(
                     text = "Assign the seven aliyot and maftir for this rehearsal. These are operational slots only; no sacred text or eligibility decision is supplied.",
@@ -381,7 +389,7 @@ fun BuildScreen(
                 )
             }
 
-            if (selectedStage == BuildStage.PACKET_AND_DATA) {
+            if (selectedStage == BuildStage.PACKET_AND_DATA && serviceOccurrenceSupported) {
                 SectionCard(title = "Readiness") {
                 Text(
                     text = "Practice: ${practice?.first ?: 0} of ${practice?.second ?: 0} steps",
@@ -536,7 +544,7 @@ fun BuildScreen(
                 }
             }
 
-            if (selectedStage == BuildStage.PACKET_AND_DATA) {
+            if (selectedStage == BuildStage.PACKET_AND_DATA && serviceOccurrenceSupported) {
                 SectionCard(title = "Service packet") {
                 Text("$dateLabel · $locationLabel")
                 Text("${state.deviceUseMode.label}: the packet contains checklist status, every reading slot, role assignments, accessibility cues, source provenance, and the adopted local option. It contains no prayer text.")

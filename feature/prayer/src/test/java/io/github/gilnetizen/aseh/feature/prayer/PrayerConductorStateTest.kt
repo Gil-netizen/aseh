@@ -10,7 +10,14 @@ import io.github.gilnetizen.aseh.core.model.ReadingSlotKind
 import io.github.gilnetizen.aseh.core.model.ServiceReadiness
 import io.github.gilnetizen.aseh.core.model.ServiceReadinessStatus
 import io.github.gilnetizen.aseh.core.model.ServiceSegment
+import io.github.gilnetizen.aseh.domain.servicecatalog.ServiceScheduleSelector
+import io.github.gilnetizen.aseh.domain.servicecatalog.ServiceSelectionRequest
+import io.github.gilnetizen.aseh.domain.servicecatalog.ServiceSelectionResult
+import io.github.gilnetizen.aseh.domain.servicecatalog.SyntheticDevelopmentServiceCatalog
+import java.time.Instant
+import java.time.ZoneId
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PrayerConductorStateTest {
@@ -159,6 +166,29 @@ class PrayerConductorStateTest {
         )
 
         assertEquals(0, openReadingSlotCount(slots, state))
+    }
+
+    @Test
+    fun selectedServiceRemainsVisibleBeyondTheChronologicalPreview() {
+        val selection = ServiceScheduleSelector(SyntheticDevelopmentServiceCatalog.catalog)
+            .select(
+                ServiceSelectionRequest(
+                    now = Instant.parse("2026-10-04T00:00:00Z"),
+                    zoneId = ZoneId.of("Asia/Jerusalem"),
+                    opinionProfileId = SyntheticDevelopmentServiceCatalog.ISRAEL_PROFILE_ID,
+                ),
+            ) as ServiceSelectionResult.Available
+        val selected = selection.agenda.upcomingServices.first { service ->
+            service.definition.id == "dev.service.shabbat.morning"
+        }
+
+        val visible = visibleScheduledServices(
+            upcomingServices = selection.agenda.upcomingServices,
+            selectedServiceId = selected.id,
+        )
+
+        assertEquals(13, visible.size)
+        assertTrue(selected in visible)
     }
 
     private fun assembledSegment(id: String): AssembledServiceSegment =

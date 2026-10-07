@@ -31,11 +31,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.gilnetizen.aseh.core.model.DemonstratorCatalog
 import io.github.gilnetizen.aseh.core.model.WorkspaceKind
+import io.github.gilnetizen.aseh.domain.workspace.WorkspaceRecordAddress
+import io.github.gilnetizen.aseh.domain.workspace.WorkspaceSnapshot
 
 internal enum class GlobalSearchDestination {
   PRACTICE,
   PRAYER,
   STUDY_SOURCE,
+  BUILD,
 }
 
 internal data class GlobalSearchEntry(
@@ -44,6 +47,8 @@ internal data class GlobalSearchEntry(
   val detail: String,
   val category: String,
   val destination: GlobalSearchDestination,
+  val workspaceKind: WorkspaceKind? = null,
+  val workspaceRecordAddress: WorkspaceRecordAddress? = null,
 )
 
 internal fun searchCatalog(
@@ -219,11 +224,24 @@ internal fun ContextChooserDialog(
 @Composable
 internal fun GlobalSearchDialog(
   catalog: DemonstratorCatalog?,
+  workspaceSnapshot: WorkspaceSnapshot = WorkspaceSnapshot(),
   onOpenEntry: (GlobalSearchEntry) -> Unit,
   onDismiss: () -> Unit,
 ) {
   var query by rememberSaveable { mutableStateOf("") }
-  val results = searchCatalog(catalog, query)
+  val results = (
+    searchWorkspace(workspaceSnapshot, query).map { entry ->
+      GlobalSearchEntry(
+        id = entry.id,
+        title = entry.title,
+        detail = entry.detail,
+        category = entry.category,
+        destination = GlobalSearchDestination.BUILD,
+        workspaceKind = entry.workspaceKind,
+        workspaceRecordAddress = entry.address,
+      )
+    } + searchCatalog(catalog, query)
+  ).take(30)
   AlertDialog(
     onDismissRequest = onDismiss,
     title = { Text(stringResource(R.string.app_global_search)) },
@@ -266,15 +284,15 @@ internal fun GlobalSearchDialog(
                   horizontalAlignment = Alignment.Start,
                 ) {
                   Text(
-                    text = entry.category,
+                    text = stringResource(R.string.app_search_english_fallback, entry.category),
                     style = MaterialTheme.typography.labelMedium,
                   )
                   Text(
-                    text = entry.title,
+                    text = "\u2068${entry.title}\u2069",
                     style = MaterialTheme.typography.titleMedium,
                   )
                   Text(
-                    text = entry.detail,
+                    text = stringResource(R.string.app_search_english_fallback, entry.detail),
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.bodySmall,

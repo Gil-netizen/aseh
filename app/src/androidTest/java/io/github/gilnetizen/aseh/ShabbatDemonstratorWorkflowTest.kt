@@ -11,6 +11,7 @@ import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
@@ -22,9 +23,9 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.performTouchInput
 import androidx.test.ext.junit.rules.ActivityScenarioRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import androidx.test.espresso.Espresso.pressBack
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.gilnetizen.aseh.core.database.ManualPlaceContext
 import io.github.gilnetizen.aseh.core.database.PlaceContextSource
@@ -38,6 +39,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -75,13 +77,12 @@ class ShabbatDemonstratorWorkflowTest {
   fun resetPersistedWorkflow() {
     runBlocking(Dispatchers.IO) {
       withTimeout(5_000) {
-        preferencesRepository().setSelectedDestinationId("now")
         resetExperienceState()
         manualPlaceContextRepository().save(TEST_DEVICE_PLACE)
-        preferencesRepository().preferences.first { it.selectedDestinationId == "now" }
         experienceRepository().state.first(::isDefaultExperienceState)
       }
     }
+    synchronizeSelectedDestination("now")
     composeRule.activityRule.scenario.recreate()
     waitUntilSelected("now")
   }
@@ -98,11 +99,41 @@ class ShabbatDemonstratorWorkflowTest {
 
   @Test
   fun preparationBuildPrayerStudyAndPacketFormOnePersistedWorkflow() {
-    completePreparationChecklistAndVerifyItSurvivesNavigation()
+    browsePracticeBeforeServiceSetupWithoutRecordingProgress()
     configureWorkspaceTeamReadingChoiceAndCharter()
+    completePreparationChecklistAndVerifyItSurvivesNavigation()
     verifyShareChooserReceivesTheConfiguredPacket()
     completeAConductorStepAndResumeAfterRecreation()
     askAQuestionAndOpenItsExactInstalledSource()
+  }
+
+  private fun browsePracticeBeforeServiceSetupWithoutRecordingProgress() {
+    selectDestination("practice")
+    composeRule.onNodeWithTag("practice-catalog")
+      .performScrollToNode(hasTestTag("practice-card-practice.rehearsal.team"))
+    composeRule.onNodeWithTag("practice-card-practice.rehearsal.team")
+      .assertIsDisplayed()
+      .performClick()
+    composeRule.onNodeWithTag("practice-detail")
+      .performScrollToNode(hasTestTag("practice-progress-unavailable"))
+    composeRule.onNodeWithTag("practice-progress-unavailable")
+      .assertIsDisplayed()
+    composeRule.onNodeWithTag("practice-detail")
+      .performScrollToNode(hasTestTag("practice-step-practice.team.leader"))
+    composeRule.onNodeWithTag("practice-step-practice.team.leader")
+      .assertIsOff()
+      .assertIsNotEnabled()
+      .performTouchInput { click() }
+    composeRule.waitForIdle()
+
+    val state = runBlocking(Dispatchers.IO) { experienceRepository().state.first() }
+    assertTrue(
+      "Practice browsing without a service occurrence must not persist step progress",
+      state.completedPracticeStepIds.isEmpty(),
+    )
+
+    pressSystemBack()
+    composeRule.onNodeWithTag("practice-catalog").assertIsDisplayed()
   }
 
   private fun completePreparationChecklistAndVerifyItSurvivesNavigation() {
@@ -117,13 +148,14 @@ class ShabbatDemonstratorWorkflowTest {
           .performScrollToNode(hasTestTag("practice-step-$stepId"))
         composeRule.onNodeWithTag("practice-step-$stepId")
           .assertIsOff()
+          .assertIsEnabled()
           .performClick()
         waitForExperienceState("completed preparation step $stepId") {
           stepId in it.completedPracticeStepIds
         }
       }
       if (index < PREPARATION_CARDS.lastIndex) {
-        pressBack()
+        pressSystemBack()
         composeRule.onNodeWithTag("practice-catalog").assertIsDisplayed()
       }
     }
@@ -157,6 +189,7 @@ class ShabbatDemonstratorWorkflowTest {
       .assertIsDisplayed()
       .performClick()
 
+    selectBuildStage("setup")
     composeRule.onNodeWithText("Household")
       .performScrollTo()
       .performClick()
@@ -166,14 +199,6 @@ class ShabbatDemonstratorWorkflowTest {
     composeRule.onNodeWithTag("build-save-workspace")
       .performScrollTo()
       .performClick()
-
-    selectBuildStage("team-readings")
-    assignRole("leader", LEADER_NAME)
-    assignRole("reader", READER_NAME)
-    assignRole("gabbai", GABBAI_NAME)
-    assignRole("host", HOST_NAME)
-
-    selectBuildStage("setup")
     composeRule.onNodeWithTag("build-calendar-region-israel")
       .performScrollTo()
       .performClick()
@@ -194,12 +219,19 @@ class ShabbatDemonstratorWorkflowTest {
       .performScrollTo()
       .performClick()
     waitForExperienceState("visual voice and response cues") { state ->
+      state.calendarRegion == CalendarRegion.ISRAEL &&
+        state.serviceInstanceKey != null &&
       state.accessibilityProfile.participantNeedsReviewed &&
         state.accessibilityProfile.useMovementAlternatives &&
         state.accessibilityProfile.useVisualVoiceCues
     }
 
     selectBuildStage("team-readings")
+    assignRole("leader", LEADER_NAME)
+    assignRole("reader", READER_NAME)
+    assignRole("gabbai", GABBAI_NAME)
+    assignRole("host", HOST_NAME)
+
     READING_SLOTS.forEachIndexed { index, slot ->
       val slotId = slot.first
       val name = if (index == 0) READER_NAME else "Reader ${index + 1}"
@@ -383,6 +415,11 @@ class ShabbatDemonstratorWorkflowTest {
   }
 
   private fun verifyShareChooserReceivesTheConfiguredPacket() {
+    selectDestination("build")
+    if (composeRule.onAllNodesWithTag("workspace-open-service-setup").fetchSemanticsNodes().isNotEmpty()) {
+      composeRule.onNodeWithTag("workspace-open-service-setup").performClick()
+    }
+    selectBuildStage("packet-data")
     composeRule.onNodeWithTag("build-print-packet")
       .performScrollTo()
       .performClick()
@@ -565,11 +602,34 @@ class ShabbatDemonstratorWorkflowTest {
   }
 
   private fun isDefaultExperienceState(state: ExperienceState): Boolean =
-    state.copy(serviceInstanceDate = null) == ExperienceState()
+    state.copy(serviceInstanceId = null, serviceInstanceDate = null) == ExperienceState()
 
   private fun selectDestination(destinationId: String) {
     composeRule.onNodeWithTag("destination-$destinationId").performClick()
     waitUntilSelected(destinationId)
+  }
+
+  private fun synchronizeSelectedDestination(destinationId: String) {
+    appGraph().setSelectedDestinationId(TEST_NAVIGATION_BARRIER_ID)
+    waitUntilPersistedDestination(TEST_NAVIGATION_BARRIER_ID)
+    appGraph().setSelectedDestinationId(destinationId)
+    waitUntilPersistedDestination(destinationId)
+  }
+
+  private fun waitUntilPersistedDestination(destinationId: String) {
+    composeRule.waitUntil(timeoutMillis = 5_000) {
+      runBlocking(Dispatchers.IO) {
+        withTimeoutOrNull(250) {
+          preferencesRepository().preferences.first().selectedDestinationId == destinationId
+        } == true
+      }
+    }
+  }
+
+  private fun pressSystemBack() {
+    composeRule.runOnIdle {
+      composeRule.activity.onBackPressedDispatcher.onBackPressed()
+    }
   }
 
   private fun waitUntilSelected(destinationId: String) {
@@ -659,6 +719,7 @@ class ShabbatDemonstratorWorkflowTest {
   }
 
   private companion object {
+    const val TEST_NAVIGATION_BARRIER_ID = "test_sync"
     const val WORKSPACE_NAME = "Har Nof Shabbat Lab"
     const val LEADER_NAME = "Leah Test"
     const val READER_NAME = "Miriam Test"

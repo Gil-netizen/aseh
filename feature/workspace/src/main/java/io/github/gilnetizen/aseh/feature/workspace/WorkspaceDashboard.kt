@@ -12,18 +12,36 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.error
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -39,6 +57,10 @@ import io.github.gilnetizen.aseh.domain.workspace.PracticeAdoptionStatus
 import io.github.gilnetizen.aseh.domain.workspace.WorkspaceCommand
 import io.github.gilnetizen.aseh.domain.workspace.WorkspaceIssue
 import io.github.gilnetizen.aseh.domain.workspace.WorkspaceIssueCode
+import io.github.gilnetizen.aseh.domain.workspace.WorkspaceRecordAddress
+import io.github.gilnetizen.aseh.domain.workspace.WorkspaceRecordId
+import io.github.gilnetizen.aseh.domain.workspace.WorkspaceRecordKind as WorkspaceSearchRecordKind
+import io.github.gilnetizen.aseh.domain.workspace.WorkspaceId
 import io.github.gilnetizen.aseh.domain.workspace.WorkspaceSnapshot
 import java.time.LocalDate
 
@@ -55,34 +77,177 @@ fun WorkspaceDashboard(
     onCommand: (WorkspaceCommand) -> Unit,
     modifier: Modifier = Modifier,
     feedback: WorkspaceDashboardFeedback = WorkspaceDashboardFeedback(),
+    requestedRecord: WorkspaceRecordAddress? = null,
+    onRequestedRecordConsumed: () -> Unit = {},
+    dismissEditorRequest: Int = 0,
+    onEditorOpenChanged: (Boolean) -> Unit = {},
 ) {
     val model = remember(snapshot, activeContext, asOf) {
         WorkspaceDashboardPresenter.present(snapshot, activeContext, asOf)
     }
     val validationIssues = (model.domainIssues + feedback.validationIssues).distinct()
     val localeIsHebrew = LocalConfiguration.current.locales[0].language in setOf("he", "iw")
+    val highlightedDescription = stringResource(R.string.workspace_search_result_highlighted)
+    val workspaceTitle = stringResource(R.string.workspace_title)
+    val workspaceHeadingAccessibilityLabel = listOfNotNull(workspaceTitle, model.contextLabel)
+        .joinToString(". ")
+    var editor by remember(activeContext) { mutableStateOf<WorkspaceEditor?>(null) }
+    var pendingEditorCommand by remember(activeContext) { mutableStateOf<WorkspaceCommand?>(null) }
+    var pendingEditor by remember(activeContext) { mutableStateOf<WorkspaceEditor?>(null) }
+    var highlightedRecord by remember(activeContext) { mutableStateOf<WorkspaceRecordAddress?>(null) }
+    val listState = rememberLazyListState()
+    val headingBringIntoViewRequester = remember { BringIntoViewRequester() }
+    val headingFocusRequester = remember { FocusRequester() }
+    val workspaceHeadingHighlighted = highlightedRecord.matchesWorkspace(activeContext.workspaceId)
+
+    LaunchedEffect(editor) {
+        if (editor != null) listState.animateScrollToItem(1)
+    }
+
+    LaunchedEffect(editor != null) {
+        onEditorOpenChanged(editor != null)
+    }
+
+    LaunchedEffect(dismissEditorRequest) {
+        if (editor != null && pendingEditorCommand == null) {
+            pendingEditor = null
+            editor = null
+        }
+    }
+
+    LaunchedEffect(requestedRecord, model.content) {
+        val requested = requestedRecord
+        if (requested?.workspaceId == activeContext.workspaceId) {
+            highlightedRecord = requested
+            if (requested.kind == WorkspaceSearchRecordKind.WORKSPACE) {
+                listState.scrollToItem(0)
+                // Item zero may have been disposed after a prior record result. Wait until the
+                // scroll recomposes it, then take focus after the departing dialog restores focus.
+                withFrameNanos { }
+                headingBringIntoViewRequester.bringIntoView()
+                withFrameNanos { }
+                headingFocusRequester.requestFocus()
+                onRequestedRecordConsumed()
+            } else if (requested.recordId != null) {
+                withFrameNanos { }
+                val contentIndex = listState.layoutInfo.totalItemsCount - 1
+                if (contentIndex >= 0) listState.scrollToItem(contentIndex)
+            }
+        }
+    }
+
+    LaunchedEffect(snapshot, pendingEditorCommand) {
+        val pending = pendingEditorCommand
+        if (pending != null && WorkspaceEditCommands.isApplied(snapshot, pending)) {
+            val submittedEditor = pendingEditor
+            pendingEditorCommand = null
+            pendingEditor = null
+            if (editor == submittedEditor) editor = null
+        }
+    }
+
+    LaunchedEffect(
+        pendingEditorCommand,
+        feedback.rejectedCommandIssues,
+        feedback.persistenceFailed,
+    ) {
+        if (pendingEditorCommand != null &&
+            (feedback.rejectedCommandIssues.isNotEmpty() || feedback.persistenceFailed)
+        ) {
+            pendingEditorCommand = null
+            pendingEditor = null
+        }
+    }
+
+    fun openWorkspaceEditor() {
+        editor = when (val content = model.content) {
+            is WorkspaceDashboardContent.Self -> WorkspaceEditor.SelfName(content.workspace)
+            is WorkspaceDashboardContent.Household -> WorkspaceEditor.HouseholdName(content.workspace)
+            is WorkspaceDashboardContent.Qahal -> WorkspaceEditor.QahalName(content.workspace)
+            WorkspaceDashboardContent.Missing -> null
+        }
+    }
+
+    fun dispatchEditorCommand(command: WorkspaceCommand) {
+        if (pendingEditorCommand != null) return
+        pendingEditor = editor
+        pendingEditorCommand = command
+        onCommand(command)
+    }
 
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
             .testTag("workspace-dashboard"),
+        state = listState,
         contentPadding = PaddingValues(start = 20.dp, top = 28.dp, end = 20.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         item("heading") {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    text = stringResource(R.string.workspace_title),
-                    style = MaterialTheme.typography.headlineMedium,
-                    modifier = Modifier.semantics { heading() },
-                )
-                model.contextLabel?.let { label ->
-                    Text(isolate(label), style = MaterialTheme.typography.titleLarge)
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .bringIntoViewRequester(headingBringIntoViewRequester)
+                    .focusRequester(headingFocusRequester)
+                    .focusable()
+                    .testTag("workspace-heading")
+                    .semantics {
+                        contentDescription = workspaceHeadingAccessibilityLabel
+                        if (workspaceHeadingHighlighted) {
+                            stateDescription = highlightedDescription
+                        }
+                    },
+                color = if (workspaceHeadingHighlighted) {
+                    MaterialTheme.colorScheme.secondaryContainer
+                } else {
+                    MaterialTheme.colorScheme.background
+                },
+                shape = MaterialTheme.shapes.medium,
+            ) {
+                Column(
+                    modifier = if (workspaceHeadingHighlighted) Modifier.padding(12.dp) else Modifier,
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(
+                        text = workspaceTitle,
+                        style = MaterialTheme.typography.headlineMedium,
+                        modifier = Modifier.semantics { heading() },
+                    )
+                    model.contextLabel?.let { label ->
+                        Text(isolate(label), style = MaterialTheme.typography.titleLarge)
+                    }
+                    Text(stringResource(R.string.workspace_summary), style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        stringResource(R.string.workspace_as_of, isolate(asOf.toString())),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    if (model.content != WorkspaceDashboardContent.Missing) {
+                        OutlinedButton(
+                            onClick = ::openWorkspaceEditor,
+                            modifier = Modifier
+                                .defaultMinSize(minHeight = 48.dp)
+                                .testTag("workspace-edit-name"),
+                        ) {
+                            Text(stringResource(R.string.workspace_edit_workspace))
+                        }
+                    }
                 }
-                Text(stringResource(R.string.workspace_summary), style = MaterialTheme.typography.bodyLarge)
-                Text(
-                    stringResource(R.string.workspace_as_of, isolate(asOf.toString())),
-                    style = MaterialTheme.typography.bodyMedium,
+            }
+        }
+
+        editor?.let { activeEditor ->
+            item("workspace-editor") {
+                WorkspaceEditorCard(
+                    editor = activeEditor,
+                    asOf = asOf,
+                    onCancel = {
+                        if (pendingEditorCommand == null) {
+                            pendingEditor = null
+                            editor = null
+                        }
+                    },
+                    onCommand = ::dispatchEditorCommand,
+                    actionsEnabled = pendingEditorCommand == null,
                 )
             }
         }
@@ -113,9 +278,15 @@ fun WorkspaceDashboard(
         }
         if (feedback.persistenceFailed) {
             item("persistence-feedback") {
+                val message = stringResource(R.string.workspace_persistence_failed)
                 NoticeCard(
-                    text = stringResource(R.string.workspace_persistence_failed),
-                    modifier = Modifier.testTag("workspace-persistence-feedback"),
+                    text = message,
+                    modifier = Modifier
+                        .testTag("workspace-persistence-feedback")
+                        .semantics {
+                            error(message)
+                            liveRegion = LiveRegionMode.Polite
+                        },
                 )
             }
         }
@@ -133,7 +304,9 @@ fun WorkspaceDashboard(
         when (val content = model.content) {
             is WorkspaceDashboardContent.Self -> item("self-content") {
                 DashboardSection(stringResource(R.string.workspace_personal_practices)) {
-                    if (content.workspace.practiceAdoptions.isEmpty()) EmptySection()
+                    if (content.workspace.practiceAdoptions.isEmpty()) {
+                        NoticeCard(stringResource(R.string.workspace_practice_creation_limited))
+                    }
                     content.workspace.practiceAdoptions.forEach { adoption ->
                         RecordCard(
                             title = adoption.label,
@@ -150,15 +323,43 @@ fun WorkspaceDashboard(
                             ),
                             actions = model.actionsFor(WorkspaceRecordKind.PRACTICE, adoption.id),
                             onCommand = onCommand,
+                            recordId = adoption.id,
+                            revealRequested = requestedRecord.matches(
+                                content.workspace.id,
+                                WorkspaceSearchRecordKind.PERSONAL_PRACTICE,
+                                adoption.id,
+                            ),
+                            highlighted = highlightedRecord.matches(
+                                content.workspace.id,
+                                WorkspaceSearchRecordKind.PERSONAL_PRACTICE,
+                                adoption.id,
+                            ),
+                            onRequestedRecordConsumed = onRequestedRecordConsumed,
                         )
                     }
                 }
             }
             is WorkspaceDashboardContent.Household -> item("household-content") {
-                HouseholdContent(content.workspace, model, onCommand)
+                HouseholdContent(
+                    workspace = content.workspace,
+                    model = model,
+                    onCommand = onCommand,
+                    onEdit = { editor = it },
+                    requestedRecord = requestedRecord,
+                    highlightedRecord = highlightedRecord,
+                    onRequestedRecordConsumed = onRequestedRecordConsumed,
+                )
             }
             is WorkspaceDashboardContent.Qahal -> item("qahal-content") {
-                QahalContent(content.workspace, model, onCommand)
+                QahalContent(
+                    workspace = content.workspace,
+                    model = model,
+                    onCommand = onCommand,
+                    onEdit = { editor = it },
+                    requestedRecord = requestedRecord,
+                    highlightedRecord = highlightedRecord,
+                    onRequestedRecordConsumed = onRequestedRecordConsumed,
+                )
             }
             WorkspaceDashboardContent.Missing -> item("missing") {
                 NoticeCard(stringResource(R.string.workspace_missing))
@@ -172,9 +373,18 @@ private fun HouseholdContent(
     workspace: io.github.gilnetizen.aseh.domain.workspace.HouseholdWorkspace,
     model: WorkspaceDashboardModel,
     onCommand: (WorkspaceCommand) -> Unit,
+    onEdit: (WorkspaceEditor) -> Unit,
+    requestedRecord: WorkspaceRecordAddress?,
+    highlightedRecord: WorkspaceRecordAddress?,
+    onRequestedRecordConsumed: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         DashboardSection(stringResource(R.string.workspace_household_responsibilities)) {
+            AddRecordButton(
+                text = stringResource(R.string.workspace_add_responsibility),
+                tag = "workspace-add-responsibility",
+                onClick = { onEdit(WorkspaceEditor.Responsibility(workspace)) },
+            )
             if (workspace.responsibilities.isEmpty()) EmptySection()
             workspace.responsibilities.forEach { item ->
                 RecordCard(
@@ -186,10 +396,29 @@ private fun HouseholdContent(
                     ),
                     actions = model.actionsFor(WorkspaceRecordKind.RESPONSIBILITY, item.id),
                     onCommand = onCommand,
+                    onEdit = { onEdit(WorkspaceEditor.Responsibility(workspace, item)) },
+                    editTag = "workspace-edit-responsibility-${item.id.value}",
+                    revealRequested = requestedRecord.matches(
+                        workspace.id,
+                        WorkspaceSearchRecordKind.HOUSEHOLD_RESPONSIBILITY,
+                        item.id,
+                    ),
+                    highlighted = highlightedRecord.matches(
+                        workspace.id,
+                        WorkspaceSearchRecordKind.HOUSEHOLD_RESPONSIBILITY,
+                        item.id,
+                    ),
+                    recordId = item.id,
+                    onRequestedRecordConsumed = onRequestedRecordConsumed,
                 )
             }
         }
         DashboardSection(stringResource(R.string.workspace_household_calendar)) {
+            AddRecordButton(
+                text = stringResource(R.string.workspace_add_calendar),
+                tag = "workspace-add-calendar",
+                onClick = { onEdit(WorkspaceEditor.CalendarItem(workspace)) },
+            )
             if (workspace.calendarItems.isEmpty()) EmptySection()
             workspace.calendarItems.forEach { item ->
                 RecordCard(
@@ -202,10 +431,29 @@ private fun HouseholdContent(
                     ),
                     actions = model.actionsFor(WorkspaceRecordKind.CALENDAR_ITEM, item.id),
                     onCommand = onCommand,
+                    onEdit = { onEdit(WorkspaceEditor.CalendarItem(workspace, item)) },
+                    editTag = "workspace-edit-calendar-${item.id.value}",
+                    revealRequested = requestedRecord.matches(
+                        workspace.id,
+                        WorkspaceSearchRecordKind.HOUSEHOLD_CALENDAR_ITEM,
+                        item.id,
+                    ),
+                    highlighted = highlightedRecord.matches(
+                        workspace.id,
+                        WorkspaceSearchRecordKind.HOUSEHOLD_CALENDAR_ITEM,
+                        item.id,
+                    ),
+                    recordId = item.id,
+                    onRequestedRecordConsumed = onRequestedRecordConsumed,
                 )
             }
         }
         DashboardSection(stringResource(R.string.workspace_preparation_kits)) {
+            AddRecordButton(
+                text = stringResource(R.string.workspace_add_preparation_kit),
+                tag = "workspace-add-preparation-kit",
+                onClick = { onEdit(WorkspaceEditor.PreparationKit(workspace)) },
+            )
             if (workspace.preparationKits.isEmpty()) EmptySection()
             workspace.preparationKits.forEach { kit ->
                 RecordCard(
@@ -216,7 +464,26 @@ private fun HouseholdContent(
                     ),
                     actions = model.actionsFor(WorkspaceRecordKind.PREPARATION_KIT, kit.id),
                     onCommand = onCommand,
+                    onEdit = { onEdit(WorkspaceEditor.PreparationKit(workspace, kit)) },
+                    editTag = "workspace-edit-preparation-kit-${kit.id.value}",
+                    recordId = kit.id,
+                    revealRequested = requestedRecord.matches(
+                        workspace.id,
+                        WorkspaceSearchRecordKind.HOUSEHOLD_PREPARATION_KIT,
+                        kit.id,
+                    ),
+                    highlighted = highlightedRecord.matches(
+                        workspace.id,
+                        WorkspaceSearchRecordKind.HOUSEHOLD_PREPARATION_KIT,
+                        kit.id,
+                    ),
+                    onRequestedRecordConsumed = onRequestedRecordConsumed,
                 ) {
+                    AddRecordButton(
+                        text = stringResource(R.string.workspace_add_preparation_task),
+                        tag = "workspace-add-preparation-task-${kit.id.value}",
+                        onClick = { onEdit(WorkspaceEditor.PreparationTask(workspace, kit)) },
+                    )
                     kit.tasks.forEach { task ->
                         RecordCard(
                             title = task.label,
@@ -232,6 +499,22 @@ private fun HouseholdContent(
                             ),
                             onCommand = onCommand,
                             compact = true,
+                            onEdit = { onEdit(WorkspaceEditor.PreparationTask(workspace, kit, task)) },
+                            editTag = "workspace-edit-preparation-task-${task.id.value}",
+                            recordId = task.id,
+                            revealRequested = requestedRecord.matches(
+                                workspace.id,
+                                WorkspaceSearchRecordKind.PREPARATION_KIT_TASK,
+                                task.id,
+                                kit.id,
+                            ),
+                            highlighted = highlightedRecord.matches(
+                                workspace.id,
+                                WorkspaceSearchRecordKind.PREPARATION_KIT_TASK,
+                                task.id,
+                                kit.id,
+                            ),
+                            onRequestedRecordConsumed = onRequestedRecordConsumed,
                         )
                     }
                 }
@@ -245,9 +528,18 @@ private fun QahalContent(
     workspace: io.github.gilnetizen.aseh.domain.workspace.QahalWorkspace,
     model: WorkspaceDashboardModel,
     onCommand: (WorkspaceCommand) -> Unit,
+    onEdit: (WorkspaceEditor) -> Unit,
+    requestedRecord: WorkspaceRecordAddress?,
+    highlightedRecord: WorkspaceRecordAddress?,
+    onRequestedRecordConsumed: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         DashboardSection(stringResource(R.string.workspace_qahal_decisions)) {
+            AddRecordButton(
+                text = stringResource(R.string.workspace_add_decision),
+                tag = "workspace-add-decision",
+                onClick = { onEdit(WorkspaceEditor.Decision(workspace)) },
+            )
             if (workspace.decisions.isEmpty()) EmptySection()
             workspace.decisions.forEach { decision ->
                 val details = buildList {
@@ -266,10 +558,29 @@ private fun QahalContent(
                     details = details,
                     actions = model.actionsFor(WorkspaceRecordKind.DECISION, decision.id),
                     onCommand = onCommand,
+                    onEdit = { onEdit(WorkspaceEditor.Decision(workspace, decision)) },
+                    editTag = "workspace-edit-decision-${decision.id.value}",
+                    revealRequested = requestedRecord.matches(
+                        workspace.id,
+                        WorkspaceSearchRecordKind.QAHAL_DECISION,
+                        decision.id,
+                    ),
+                    highlighted = highlightedRecord.matches(
+                        workspace.id,
+                        WorkspaceSearchRecordKind.QAHAL_DECISION,
+                        decision.id,
+                    ),
+                    recordId = decision.id,
+                    onRequestedRecordConsumed = onRequestedRecordConsumed,
                 )
             }
         }
         DashboardSection(stringResource(R.string.workspace_volunteer_rotations)) {
+            AddRecordButton(
+                text = stringResource(R.string.workspace_add_volunteer_rotation),
+                tag = "workspace-add-volunteer-rotation",
+                onClick = { onEdit(WorkspaceEditor.VolunteerRotationEditor(workspace)) },
+            )
             if (workspace.volunteerRotations.isEmpty()) EmptySection()
             workspace.volunteerRotations.forEach { rotation ->
                 RecordCard(
@@ -278,7 +589,26 @@ private fun QahalContent(
                     details = emptyList(),
                     actions = model.actionsFor(WorkspaceRecordKind.VOLUNTEER_ROTATION, rotation.id),
                     onCommand = onCommand,
+                    onEdit = { onEdit(WorkspaceEditor.VolunteerRotationEditor(workspace, rotation)) },
+                    editTag = "workspace-edit-volunteer-rotation-${rotation.id.value}",
+                    recordId = rotation.id,
+                    revealRequested = requestedRecord.matches(
+                        workspace.id,
+                        WorkspaceSearchRecordKind.VOLUNTEER_ROTATION,
+                        rotation.id,
+                    ),
+                    highlighted = highlightedRecord.matches(
+                        workspace.id,
+                        WorkspaceSearchRecordKind.VOLUNTEER_ROTATION,
+                        rotation.id,
+                    ),
+                    onRequestedRecordConsumed = onRequestedRecordConsumed,
                 ) {
+                    AddRecordButton(
+                        text = stringResource(R.string.workspace_add_volunteer_slot),
+                        tag = "workspace-add-volunteer-slot-${rotation.id.value}",
+                        onClick = { onEdit(WorkspaceEditor.VolunteerSlotEditor(workspace, rotation)) },
+                    )
                     rotation.slots.forEach { slot ->
                         RecordCard(
                             title = stringResource(
@@ -294,12 +624,33 @@ private fun QahalContent(
                             ),
                             onCommand = onCommand,
                             compact = true,
+                            onEdit = { onEdit(WorkspaceEditor.VolunteerSlotEditor(workspace, rotation, slot)) },
+                            editTag = "workspace-edit-volunteer-slot-${slot.id.value}",
+                            recordId = slot.id,
+                            revealRequested = requestedRecord.matches(
+                                workspace.id,
+                                WorkspaceSearchRecordKind.VOLUNTEER_SLOT,
+                                slot.id,
+                                rotation.id,
+                            ),
+                            highlighted = highlightedRecord.matches(
+                                workspace.id,
+                                WorkspaceSearchRecordKind.VOLUNTEER_SLOT,
+                                slot.id,
+                                rotation.id,
+                            ),
+                            onRequestedRecordConsumed = onRequestedRecordConsumed,
                         )
                     }
                 }
             }
         }
         DashboardSection(stringResource(R.string.workspace_inventory)) {
+            AddRecordButton(
+                text = stringResource(R.string.workspace_add_inventory),
+                tag = "workspace-add-inventory",
+                onClick = { onEdit(WorkspaceEditor.Inventory(workspace)) },
+            )
             if (workspace.inventory.isEmpty()) EmptySection()
             workspace.inventory.forEach { item ->
                 RecordCard(
@@ -318,10 +669,29 @@ private fun QahalContent(
                     ),
                     actions = model.actionsFor(WorkspaceRecordKind.INVENTORY, item.id),
                     onCommand = onCommand,
+                    onEdit = { onEdit(WorkspaceEditor.Inventory(workspace, item)) },
+                    editTag = "workspace-edit-inventory-${item.id.value}",
+                    revealRequested = requestedRecord.matches(
+                        workspace.id,
+                        WorkspaceSearchRecordKind.INVENTORY_ITEM,
+                        item.id,
+                    ),
+                    highlighted = highlightedRecord.matches(
+                        workspace.id,
+                        WorkspaceSearchRecordKind.INVENTORY_ITEM,
+                        item.id,
+                    ),
+                    recordId = item.id,
+                    onRequestedRecordConsumed = onRequestedRecordConsumed,
                 )
             }
         }
         DashboardSection(stringResource(R.string.workspace_financial_controls)) {
+            AddRecordButton(
+                text = stringResource(R.string.workspace_add_financial_checklist),
+                tag = "workspace-add-financial-checklist",
+                onClick = { onEdit(WorkspaceEditor.FinancialChecklistEditor(workspace)) },
+            )
             if (workspace.financialControls.isEmpty()) EmptySection()
             workspace.financialControls.forEach { checklist ->
                 RecordCard(
@@ -335,7 +705,26 @@ private fun QahalContent(
                     ),
                     actions = model.actionsFor(WorkspaceRecordKind.FINANCIAL_CHECKLIST, checklist.id),
                     onCommand = onCommand,
+                    onEdit = { onEdit(WorkspaceEditor.FinancialChecklistEditor(workspace, checklist)) },
+                    editTag = "workspace-edit-financial-checklist-${checklist.id.value}",
+                    recordId = checklist.id,
+                    revealRequested = requestedRecord.matches(
+                        workspace.id,
+                        WorkspaceSearchRecordKind.FINANCIAL_CHECKLIST,
+                        checklist.id,
+                    ),
+                    highlighted = highlightedRecord.matches(
+                        workspace.id,
+                        WorkspaceSearchRecordKind.FINANCIAL_CHECKLIST,
+                        checklist.id,
+                    ),
+                    onRequestedRecordConsumed = onRequestedRecordConsumed,
                 ) {
+                    AddRecordButton(
+                        text = stringResource(R.string.workspace_add_financial_control),
+                        tag = "workspace-add-financial-control-${checklist.id.value}",
+                        onClick = { onEdit(WorkspaceEditor.FinancialControlEditor(workspace, checklist)) },
+                    )
                     checklist.controls.forEach { control ->
                         RecordCard(
                             title = financialControlText(control.kind),
@@ -355,6 +744,24 @@ private fun QahalContent(
                             ),
                             onCommand = onCommand,
                             compact = true,
+                            onEdit = {
+                                onEdit(WorkspaceEditor.FinancialControlEditor(workspace, checklist, control))
+                            },
+                            editTag = "workspace-edit-financial-control-${control.id.value}",
+                            recordId = control.id,
+                            revealRequested = requestedRecord.matches(
+                                workspace.id,
+                                WorkspaceSearchRecordKind.FINANCIAL_CONTROL,
+                                control.id,
+                                checklist.id,
+                            ),
+                            highlighted = highlightedRecord.matches(
+                                workspace.id,
+                                WorkspaceSearchRecordKind.FINANCIAL_CONTROL,
+                                control.id,
+                                checklist.id,
+                            ),
+                            onRequestedRecordConsumed = onRequestedRecordConsumed,
                         )
                     }
                 }
@@ -378,6 +785,24 @@ private fun DashboardSection(title: String, content: @Composable ColumnScope.() 
     }
 }
 
+private fun WorkspaceRecordAddress?.matches(
+    workspaceId: WorkspaceId,
+    kind: WorkspaceSearchRecordKind,
+    recordId: WorkspaceRecordId,
+    parentRecordId: WorkspaceRecordId? = null,
+): Boolean = this != null &&
+    this.workspaceId == workspaceId &&
+    this.kind == kind &&
+    this.recordId == recordId &&
+    this.parentRecordId == parentRecordId
+
+private fun WorkspaceRecordAddress?.matchesWorkspace(workspaceId: WorkspaceId): Boolean =
+    this != null &&
+        this.workspaceId == workspaceId &&
+        this.kind == WorkspaceSearchRecordKind.WORKSPACE &&
+        this.recordId == null &&
+        this.parentRecordId == null
+
 @Composable
 private fun RecordCard(
     title: String,
@@ -388,9 +813,51 @@ private fun RecordCard(
     modifier: Modifier = Modifier,
     summary: String? = null,
     compact: Boolean = false,
+    onEdit: (() -> Unit)? = null,
+    editTag: String = "workspace-edit-record",
+    recordId: WorkspaceRecordId? = null,
+    revealRequested: Boolean = false,
+    highlighted: Boolean = false,
+    onRequestedRecordConsumed: () -> Unit = {},
     content: (@Composable ColumnScope.() -> Unit)? = null,
 ) {
-    Card(modifier = modifier.fillMaxWidth()) {
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    val focusRequester = remember { FocusRequester() }
+    var isPlaced by remember { mutableStateOf(false) }
+    val highlightedDescription = stringResource(R.string.workspace_search_result_highlighted)
+    val statusDescription = stringResource(R.string.workspace_status_value, status)
+    val accessibleLabel = listOfNotNull(title, statusDescription, summary)
+        .plus(details.filter(String::isNotBlank))
+        .joinToString(". ")
+    LaunchedEffect(revealRequested, isPlaced) {
+        if (revealRequested && isPlaced) {
+            bringIntoViewRequester.bringIntoView()
+            // Allow the search dialog to finish restoring focus before taking final focus here.
+            withFrameNanos { }
+            focusRequester.requestFocus()
+            onRequestedRecordConsumed()
+        }
+    }
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .bringIntoViewRequester(bringIntoViewRequester)
+            .onGloballyPositioned { isPlaced = true }
+            .focusRequester(focusRequester)
+            .focusable()
+            .then(if (recordId != null) Modifier.testTag("workspace-record-${recordId.value}") else Modifier)
+            .semantics {
+                contentDescription = accessibleLabel
+                if (highlighted) stateDescription = highlightedDescription
+            },
+        colors = CardDefaults.cardColors(
+            containerColor = if (highlighted) {
+                MaterialTheme.colorScheme.secondaryContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceContainerLow
+            },
+        ),
+    ) {
         Column(
             modifier = Modifier.padding(if (compact) 12.dp else 16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -400,8 +867,26 @@ private fun RecordCard(
             if (!summary.isNullOrBlank()) Text(isolate(summary), style = MaterialTheme.typography.bodyMedium)
             details.filter(String::isNotBlank).forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
             content?.invoke(this)
+            onEdit?.let {
+                OutlinedButton(
+                    onClick = it,
+                    modifier = Modifier.defaultMinSize(minHeight = 48.dp).testTag(editTag),
+                ) {
+                    Text(stringResource(R.string.workspace_form_edit))
+                }
+            }
             ActionButtons(actions, onCommand)
         }
+    }
+}
+
+@Composable
+private fun AddRecordButton(text: String, tag: String, onClick: () -> Unit) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = Modifier.defaultMinSize(minHeight = 48.dp).testTag(tag),
+    ) {
+        Text(text)
     }
 }
 
@@ -465,10 +950,16 @@ private fun DueSoonRow(item: DueSoonItem) {
 
 @Composable
 private fun IssueCard(title: String, issues: List<WorkspaceIssue>, tag: String) {
+    val issueMessages = issues.map { issue -> issueText(issue.code) }
+    val announcement = (listOf(title) + issueMessages).joinToString(". ")
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .testTag(tag),
+            .testTag(tag)
+            .semantics {
+                error(announcement)
+                liveRegion = LiveRegionMode.Polite
+            },
         color = MaterialTheme.colorScheme.errorContainer,
         contentColor = MaterialTheme.colorScheme.onErrorContainer,
         shape = MaterialTheme.shapes.medium,
@@ -478,8 +969,8 @@ private fun IssueCard(title: String, issues: List<WorkspaceIssue>, tag: String) 
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            issues.forEach { issue ->
-                Text(issueText(issue.code))
+            issues.forEachIndexed { index, issue ->
+                Text(issueMessages[index])
                 Text(
                     stringResource(R.string.workspace_issue_path, isolate(issue.path)),
                     style = MaterialTheme.typography.bodySmall,
@@ -574,9 +1065,8 @@ private fun actionText(label: WorkspaceActionLabel): String = stringResource(
 private fun issueText(code: WorkspaceIssueCode): String = stringResource(
     when (code) {
         WorkspaceIssueCode.REQUIRED_FIELD -> R.string.workspace_issue_required
-        WorkspaceIssueCode.DUPLICATE_ID,
-        WorkspaceIssueCode.DUPLICATE_CONTROL_KIND,
-        -> R.string.workspace_issue_duplicate
+        WorkspaceIssueCode.DUPLICATE_ID -> R.string.workspace_issue_duplicate
+        WorkspaceIssueCode.DUPLICATE_CONTROL_KIND -> R.string.workspace_issue_duplicate_control_kind
         WorkspaceIssueCode.INVALID_DATE_RANGE -> R.string.workspace_issue_date
         WorkspaceIssueCode.INVALID_QUANTITY -> R.string.workspace_issue_quantity
         WorkspaceIssueCode.STATUS_REQUIREMENT_NOT_MET -> R.string.workspace_issue_status
@@ -613,7 +1103,7 @@ private fun dueKindText(kind: DueSoonKind): String = stringResource(
 )
 
 @Composable
-private fun calendarKindText(kind: HouseholdCalendarKind): String = stringResource(
+internal fun calendarKindText(kind: HouseholdCalendarKind): String = stringResource(
     when (kind) {
         HouseholdCalendarKind.PREPARATION -> R.string.workspace_calendar_preparation
         HouseholdCalendarKind.SHARED_MEAL -> R.string.workspace_calendar_meal
@@ -626,7 +1116,7 @@ private fun calendarKindText(kind: HouseholdCalendarKind): String = stringResour
 )
 
 @Composable
-private fun decisionTypeText(kind: DecisionClassification): String = stringResource(
+internal fun decisionTypeText(kind: DecisionClassification): String = stringResource(
     when (kind) {
         DecisionClassification.JUDGMENT -> R.string.workspace_decision_judgment
         DecisionClassification.ENACTMENT -> R.string.workspace_decision_enactment
@@ -637,7 +1127,7 @@ private fun decisionTypeText(kind: DecisionClassification): String = stringResou
 )
 
 @Composable
-private fun financialControlText(kind: FinancialControlKind): String = stringResource(
+internal fun financialControlText(kind: FinancialControlKind): String = stringResource(
     when (kind) {
         FinancialControlKind.DOCUMENTED_AUTHORITY -> R.string.workspace_control_documented_authority
         FinancialControlKind.DUAL_APPROVAL -> R.string.workspace_control_dual_approval

@@ -7,43 +7,46 @@ import io.github.gilnetizen.aseh.core.model.ExperienceState
 import io.github.gilnetizen.aseh.core.model.DeviceUseMode
 import io.github.gilnetizen.aseh.core.model.ParticipantRole
 import io.github.gilnetizen.aseh.core.model.ReadingPlanEntry
+import io.github.gilnetizen.aseh.core.model.ServiceInstanceKey
 import io.github.gilnetizen.aseh.core.model.ServiceAccessibilityProfile
 import io.github.gilnetizen.aseh.core.model.WorkspaceKind
-import java.time.LocalDate
 import kotlinx.coroutines.flow.Flow
 
 interface ExperienceStateRepository {
     val state: Flow<ExperienceState>
 
-    /** Activates one explicit weekly service instance and clears prior week-scoped records. */
-    suspend fun activateServiceInstance(serviceDate: LocalDate) = Unit
+    /** Activates one scheduled occurrence while preserving records owned by other occurrences. */
+    suspend fun activateServiceInstance(serviceInstance: ServiceInstanceKey) = Unit
+
+    /** Clears only the active occurrence pointer; occurrence-owned records remain available. */
+    suspend fun deactivateServiceInstance() = Unit
 
     suspend fun setPracticeStepCompleted(stepId: String, completed: Boolean)
     suspend fun setPracticeStepCompleted(
-        serviceDate: LocalDate,
+        serviceInstance: ServiceInstanceKey,
         stepId: String,
         completed: Boolean,
     ) {
-        activateServiceInstance(serviceDate)
+        activateServiceInstance(serviceInstance)
         setPracticeStepCompleted(stepId, completed)
     }
     suspend fun setPracticeCardSaved(cardId: String, saved: Boolean)
     suspend fun setPreflightStepCompleted(stepId: String, completed: Boolean)
     suspend fun setPreflightStepCompleted(
-        serviceDate: LocalDate,
+        serviceInstance: ServiceInstanceKey,
         stepId: String,
         completed: Boolean,
     ) {
-        activateServiceInstance(serviceDate)
+        activateServiceInstance(serviceInstance)
         setPreflightStepCompleted(stepId, completed)
     }
     suspend fun setServiceSegmentCompleted(segmentId: String, completed: Boolean)
     suspend fun setServiceSegmentCompleted(
-        serviceDate: LocalDate,
+        serviceInstance: ServiceInstanceKey,
         segmentId: String,
         completed: Boolean,
     ) {
-        activateServiceInstance(serviceDate)
+        activateServiceInstance(serviceInstance)
         setServiceSegmentCompleted(segmentId, completed)
     }
     suspend fun setSelectedRole(role: ParticipantRole)
@@ -52,25 +55,29 @@ interface ExperienceStateRepository {
     suspend fun setWorkspace(name: String, kind: WorkspaceKind)
     suspend fun setRoleAssignment(role: ParticipantRole, name: String)
     suspend fun setRoleAssignment(
-        serviceDate: LocalDate,
+        serviceInstance: ServiceInstanceKey,
         role: ParticipantRole,
         name: String,
     ) {
-        activateServiceInstance(serviceDate)
+        activateServiceInstance(serviceInstance)
         setRoleAssignment(role, name)
     }
     suspend fun setReadingAssignment(slotId: String, name: String)
-    suspend fun setReadingAssignment(serviceDate: LocalDate, slotId: String, name: String) {
-        activateServiceInstance(serviceDate)
+    suspend fun setReadingAssignment(
+        serviceInstance: ServiceInstanceKey,
+        slotId: String,
+        name: String,
+    ) {
+        activateServiceInstance(serviceInstance)
         setReadingAssignment(slotId, name)
     }
     suspend fun setReadingPlan(slotId: String, plan: ReadingPlanEntry)
     suspend fun setReadingPlan(
-        serviceDate: LocalDate,
+        serviceInstance: ServiceInstanceKey,
         slotId: String,
         plan: ReadingPlanEntry,
     ) {
-        activateServiceInstance(serviceDate)
+        activateServiceInstance(serviceInstance)
         setReadingPlan(slotId, plan)
     }
     suspend fun setDeviceUseMode(mode: DeviceUseMode)

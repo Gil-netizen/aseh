@@ -9,6 +9,8 @@
     <string name="feature_practice_overall_progress">&#x2066;EN · All practice guides&#x2069;</string>
     <string name="feature_practice_card_progress">&#x2066;EN · Guide progress&#x2069;</string>
     <string name="feature_practice_step_progress">&#x2066;EN · %1$d of %2$d steps complete&#x2069;</string>
+    <string name="feature_practice_progress_unavailable_title">&#x2066;EN · Practice progress is unavailable&#x2069;</string>
+    <string name="feature_practice_progress_unavailable_body">&#x2066;EN · Choose a rehearsal-capable service in Pray or finish service setup in Build before recording step progress. You can still read every guide.&#x2069;</string>
     <string name="feature_practice_open_prayer">&#x2066;EN · Open prayer rehearsal&#x2069;</string>
     <string name="feature_practice_open_guide">&#x2066;EN · Open guide&#x2069;</string>
     <string name="feature_practice_saved_indicator">&#x2066;EN · Saved as a local practice&#x2069;</string>

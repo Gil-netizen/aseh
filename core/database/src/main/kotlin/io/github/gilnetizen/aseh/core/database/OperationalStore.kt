@@ -9,6 +9,7 @@ import kotlinx.coroutines.CoroutineScope
 interface OperationalStore : Closeable {
     val installedPackCatalog: InstalledPackCatalogRepository
     val experienceStateRepository: ExperienceStateRepository
+    val workspaceStateStore: WorkspaceStateStore
 }
 
 object OperationalStoreFactory {
@@ -34,6 +35,7 @@ object OperationalStoreFactory {
                 dao = database.experienceStateDao(),
                 preferenceStore = createExperiencePreferencesDataStore(appContext, scope),
             ),
+            workspaceStateStore = RoomWorkspaceStateStore(database.workspaceStateDao()),
         )
     }
 }
@@ -42,6 +44,7 @@ private class DefaultOperationalStore(
     private val database: OperationalDatabase,
     override val installedPackCatalog: InstalledPackCatalogRepository,
     override val experienceStateRepository: ExperienceStateRepository,
+    override val workspaceStateStore: WorkspaceStateStore,
 ) : OperationalStore {
     override fun close() {
         database.close()

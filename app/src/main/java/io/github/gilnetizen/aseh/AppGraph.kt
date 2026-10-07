@@ -62,7 +62,12 @@ class AppGraph(context: Context) : Closeable {
   val serviceCatalog: ServiceCatalog? = flavorServiceCatalog()
   val workspaceReviewStateRepository: WorkspaceReviewStateRepository? =
     flavorWorkspaceFixture()?.let { fixture ->
-      WorkspaceReviewStateRepositoryFactory.create(context.applicationContext, fixture)
+      WorkspaceReviewStateRepositoryFactory.create(
+        context = context.applicationContext,
+        fixture = fixture,
+        workspaceStateStore = operationalStore.workspaceStateStore,
+        scope = applicationScope,
+      )
     }
 
   init {

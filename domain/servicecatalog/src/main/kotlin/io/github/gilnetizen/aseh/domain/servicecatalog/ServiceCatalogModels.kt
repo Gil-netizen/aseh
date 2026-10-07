@@ -36,6 +36,11 @@ enum class ServiceSetting {
     COMMUNAL,
 }
 
+/** Operational tooling available independently of sacred or reviewed service content. */
+enum class ServiceOperationalCapability {
+    SHABBAT_MORNING_REHEARSAL,
+}
+
 enum class CalendarRegion {
     ISRAEL,
     DIASPORA,
@@ -127,6 +132,7 @@ data class ServiceDefinition(
     val nominalDuration: Duration,
     val preparationPolicy: PreparationPolicy,
     val contentState: ServiceContentState,
+    val operationalCapabilities: Set<ServiceOperationalCapability> = emptySet(),
 ) {
     init {
         requireStableId(id, "service definition")

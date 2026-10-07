@@ -96,6 +96,9 @@ fun PrayerScreen(
     assemblyContext: ServiceAssemblyContext? = null,
     serviceSelection: ServiceSelectionResult? = null,
     selectedScheduledServiceId: String? = null,
+    selectedScheduledService: DatedServiceInstance? = null,
+    selectedServiceContentSupported: Boolean = true,
+    serviceOccurrenceReady: Boolean = true,
     onScheduledServiceSelected: (String) -> Unit = {},
     onRoleSelected: (ParticipantRole) -> Unit = {},
     onPreflightCompleted: (String, Boolean) -> Unit = { _, _ -> },
@@ -116,13 +119,34 @@ fun PrayerScreen(
         return
     }
 
+    if (!selectedServiceContentSupported) {
+        UnsupportedSelectedServiceScreen(
+            catalog = catalog,
+            selection = serviceSelection,
+            selectedServiceId = selectedScheduledServiceId,
+            selectedService = selectedScheduledService,
+            onServiceSelected = onScheduledServiceSelected,
+            modifier = modifier,
+        )
+        return
+    }
+
+    if (!serviceOccurrenceReady) {
+        ActivatingSelectedServiceScreen(
+            selectedService = selectedScheduledService,
+            modifier = modifier,
+        )
+        return
+    }
+
     val baseContext = assemblyContext ?: assembleService(
         catalog = catalog,
         state = state,
         dateLabel = dateLabel,
         locationLabel = locationLabel,
     ).context
-    val serviceInstanceKey = "${catalog.service.id}:${baseContext.date.civilDate}"
+    val serviceInstanceKey = selectedScheduledServiceId
+        ?: "${catalog.service.id}:${baseContext.date.civilDate}"
     var rehearsalOverrideEnabled by rememberSaveable(serviceInstanceKey) {
         mutableStateOf(false)
     }
@@ -226,6 +250,12 @@ fun PrayerScreen(
                 selectedServiceId = selectedScheduledServiceId,
                 onServiceSelected = onScheduledServiceSelected,
             )
+            selectedScheduledService?.let { service ->
+                SelectedServiceContextSection(
+                    service = service,
+                    contentSupported = true,
+                )
+            }
             Surface(
                 color = MaterialTheme.colorScheme.tertiaryContainer,
                 contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
@@ -353,6 +383,226 @@ fun PrayerScreen(
 }
 
 @Composable
+private fun ActivatingSelectedServiceScreen(
+    selectedService: DatedServiceInstance?,
+    modifier: Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(PaddingValues(start = 24.dp, top = 32.dp, end = 24.dp, bottom = 48.dp))
+            .testTag("prayer-screen"),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.feature_prayer_title),
+            style = MaterialTheme.typography.headlineLarge,
+            modifier = Modifier.semantics { heading() }.testTag("prayer-heading"),
+        )
+        Surface(
+            color = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            shape = MaterialTheme.shapes.medium,
+            modifier = Modifier
+                .fillMaxWidth()
+                .semantics { liveRegion = LiveRegionMode.Polite }
+                .testTag("prayer-selected-service-activating"),
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.feature_prayer_selected_activating_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.semantics { heading() },
+                )
+                Text(
+                    text = stringResource(R.string.feature_prayer_selected_activating_detail),
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+                selectedService?.let { service ->
+                    LabelValue(
+                        label = stringResource(R.string.feature_prayer_selected_service_name),
+                        value = service.definition.title.fallbackEnglish,
+                        testTag = "prayer-activating-service-name",
+                    )
+                    LabelValue(
+                        label = stringResource(R.string.feature_prayer_selected_service_date),
+                        value = service.serviceDate.toString(),
+                        testTag = "prayer-activating-service-date",
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun UnsupportedSelectedServiceScreen(
+    catalog: DemonstratorCatalog,
+    selection: ServiceSelectionResult?,
+    selectedServiceId: String?,
+    selectedService: DatedServiceInstance?,
+    onServiceSelected: (String) -> Unit,
+    modifier: Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(
+                PaddingValues(
+                    start = 24.dp,
+                    top = 32.dp,
+                    end = 24.dp,
+                    bottom = 48.dp,
+                ),
+            )
+            .testTag("prayer-screen"),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.feature_prayer_title),
+            style = MaterialTheme.typography.headlineLarge,
+            modifier = Modifier
+                .semantics { heading() }
+                .testTag("prayer-heading"),
+        )
+        if (selection != null) {
+            ServiceScheduleSection(
+                selection = selection,
+                selectedServiceId = selectedServiceId,
+                onServiceSelected = onServiceSelected,
+            )
+        }
+        if (selectedService == null) {
+            Surface(
+                color = MaterialTheme.colorScheme.errorContainer,
+                contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                shape = MaterialTheme.shapes.medium,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("prayer-selected-service-unsupported"),
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.feature_prayer_no_selected_service_title),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.semantics { heading() },
+                    )
+                    Text(
+                        text = stringResource(R.string.feature_prayer_no_selected_service_detail),
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                }
+            }
+        } else {
+            SelectedServiceContextSection(
+                service = selectedService,
+                contentSupported = false,
+            )
+        }
+        DevelopmentNotice(catalog = catalog)
+    }
+}
+
+@Composable
+private fun SelectedServiceContextSection(
+    service: DatedServiceInstance,
+    contentSupported: Boolean,
+) {
+    Surface(
+        color = if (contentSupported) {
+            MaterialTheme.colorScheme.secondaryContainer
+        } else {
+            MaterialTheme.colorScheme.errorContainer
+        },
+        contentColor = if (contentSupported) {
+            MaterialTheme.colorScheme.onSecondaryContainer
+        } else {
+            MaterialTheme.colorScheme.onErrorContainer
+        },
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(
+                if (contentSupported) {
+                    "prayer-selected-service-context"
+                } else {
+                    "prayer-selected-service-unsupported"
+                },
+            ),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = stringResource(
+                    if (contentSupported) {
+                        R.string.feature_prayer_selected_context_title
+                    } else {
+                        R.string.feature_prayer_selected_unsupported_title
+                    },
+                ),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.semantics { heading() },
+            )
+            Text(
+                text = stringResource(
+                    if (contentSupported) {
+                        R.string.feature_prayer_selected_context_detail
+                    } else {
+                        R.string.feature_prayer_selected_unsupported_detail
+                    },
+                ),
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            LabelValue(
+                label = stringResource(R.string.feature_prayer_selected_service_name),
+                value = service.definition.title.fallbackEnglish,
+                testTag = "prayer-selected-service-name",
+            )
+            LabelValue(
+                label = stringResource(R.string.feature_prayer_selected_service_date),
+                value = service.serviceDate.toString(),
+                testTag = "prayer-selected-service-civil-date",
+            )
+            LabelValue(
+                label = stringResource(R.string.feature_prayer_selected_service_day_kind),
+                value = service.calendarDay.label.fallbackEnglish,
+                testTag = "prayer-selected-service-day-kind",
+            )
+            LabelValue(
+                label = stringResource(R.string.feature_prayer_selected_service_time),
+                value = scheduledServiceFormatter.format(service.startsAt),
+                testTag = "prayer-selected-service-time",
+            )
+            LabelValue(
+                label = stringResource(R.string.feature_prayer_selected_service_profile),
+                value = service.opinionProfile.title.fallbackEnglish,
+                testTag = "prayer-selected-service-profile",
+            )
+            if (!contentSupported) {
+                Text(
+                    text = stringResource(R.string.feature_prayer_select_supported_service),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun ServiceScheduleSection(
     selection: ServiceSelectionResult,
     selectedServiceId: String?,
@@ -413,7 +663,10 @@ private fun ServiceScheduleContents(
         text = agenda.catalogNotice.fallbackEnglish,
         style = MaterialTheme.typography.bodySmall,
     )
-    val services = agenda.upcomingServices.take(12)
+    val services = visibleScheduledServices(
+        upcomingServices = agenda.upcomingServices,
+        selectedServiceId = selectedServiceId,
+    )
     if (services.isEmpty()) {
         Text(stringResource(R.string.feature_prayer_no_upcoming_services))
         return
@@ -2228,6 +2481,19 @@ internal fun assembledServiceProgress(
 ): Pair<Int, Int> {
     val assembledSegmentIds = assembledSegments.map { assembled -> assembled.segment.id }
     return assembledSegmentIds.count(completedSegmentIds::contains) to assembledSegmentIds.size
+}
+
+internal fun visibleScheduledServices(
+    upcomingServices: List<DatedServiceInstance>,
+    selectedServiceId: String?,
+    chronologicalLimit: Int = 12,
+): List<DatedServiceInstance> {
+    require(chronologicalLimit > 0) { "The visible service limit must be positive." }
+    val selectedService = upcomingServices.firstOrNull { service ->
+        service.id == selectedServiceId
+    }
+    return (upcomingServices.take(chronologicalLimit) + listOfNotNull(selectedService))
+        .distinctBy(DatedServiceInstance::id)
 }
 
 internal fun canEnterFocusedConductor(readiness: ServiceReadiness): Boolean =

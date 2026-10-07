@@ -96,10 +96,13 @@ class OperationalDatabaseTest {
             setOf(
                 "installed_pack_catalog",
                 "experience_profile",
+                "experience_service_instance",
                 "experience_role_assignment",
                 "experience_reading_assignment",
                 "experience_reading_plan",
                 "experience_record_marker",
+                "experience_service_record_marker",
+                "workspace_snapshot_state",
             ),
             applicationTables,
         )
@@ -121,6 +124,42 @@ class OperationalDatabaseTest {
             ),
             columns,
         )
+    }
+
+    @Test
+    fun workspaceStateStorePersistsRecoveryPayloadAndClearsExplicitly() = runTest {
+        val store = RoomWorkspaceStateStore(database.workspaceStateDao())
+        val imported = StoredWorkspaceState(
+            persistenceSchemaVersion = 2,
+            fixtureId = "fixture.v1",
+            primaryPayload = "primary-v1",
+            backupPayload = "backup-v1",
+            legacyCommandPayload = "legacy-source",
+        )
+
+        assertTrue(store.importIfAbsent(imported))
+        assertFalse(store.importIfAbsent(imported.copy(primaryPayload = "must-not-replace")))
+        assertEquals(imported, store.read())
+
+        store.save(
+            persistenceSchemaVersion = 2,
+            fixtureId = "fixture.v2",
+            primaryPayload = "primary-v2",
+            backupPayload = "backup-v2",
+        )
+        assertEquals(
+            StoredWorkspaceState(
+                persistenceSchemaVersion = 2,
+                fixtureId = "fixture.v2",
+                primaryPayload = "primary-v2",
+                backupPayload = "backup-v2",
+                legacyCommandPayload = null,
+            ),
+            store.read(),
+        )
+
+        store.clear()
+        assertEquals(null, store.read())
     }
 
     @Test
@@ -149,6 +188,60 @@ class OperationalDatabaseTest {
             migrated.openHelper.writableDatabase
             assertEquals("aseh.test", migrated.installedPackCatalogDao().entries().single().packId)
             assertEquals(null, migrated.experienceStateDao().profile())
+        } finally {
+            migrated.close()
+        }
+    }
+
+    @Test
+    fun exportedVersionFourSchemaAddsEmptyWorkspaceStoreWithoutChangingExperienceRows() = runTest {
+        val occurrenceId = "dev.service.shabbat.morning@2026-10-10#dev.opinion.israel"
+        migrationHelper.createDatabase(WORKSPACE_MIGRATION_DATABASE_NAME, 4).apply {
+            execSQL(
+                """
+                INSERT INTO experience_profile (
+                    profile_id, workspace_name, workspace_kind,
+                    service_instance_id, service_instance_date,
+                    selected_community_option_id, charter_purpose, charter_participants,
+                    charter_authority_limits, charter_decision_process, charter_role_terms,
+                    charter_accessibility_commitment, charter_effective_date, charter_review_date,
+                    charter_version, charter_adopted, practice_adoption_option_id,
+                    practice_adoption_scope, practice_adoption_effective_date,
+                    practice_adoption_review_date, practice_adoption_recorded_by,
+                    legacy_datastore_migrated
+                ) VALUES (
+                    1, 'Migration household', 'household',
+                    '$occurrenceId', '2026-10-10',
+                    NULL, '', '', '', '', '', '', '', '', 'Draft 1', 0,
+                    NULL, '', '', '', '', 1
+                )
+                """.trimIndent(),
+            )
+            execSQL(
+                "INSERT INTO experience_service_instance VALUES " +
+                    "(1, '$occurrenceId', '2026-10-10')",
+            )
+            execSQL(
+                "INSERT INTO experience_role_assignment VALUES " +
+                    "(1, '$occurrenceId', 'leader', 'Ari')",
+            )
+            close()
+        }
+
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val migrated = Room.databaseBuilder(
+            context,
+            OperationalDatabase::class.java,
+            WORKSPACE_MIGRATION_DATABASE_NAME,
+        )
+            .addMigrations(*OperationalDatabaseMigrations.all)
+            .build()
+        try {
+            val snapshot = checkNotNull(migrated.experienceStateDao().snapshot())
+            assertEquals("Migration household", snapshot.profile.workspaceName)
+            assertEquals(occurrenceId, snapshot.profile.serviceInstanceId)
+            assertEquals("Ari", snapshot.roleAssignments.single().assigneeName)
+            assertEquals(null, RoomWorkspaceStateStore(migrated.workspaceStateDao()).read())
         } finally {
             migrated.close()
         }
@@ -237,6 +330,107 @@ class OperationalDatabaseTest {
         }
     }
 
+    @Test
+    fun versionThreeMigrationPreservesDatedProgressUnderAnExplicitLegacyOccurrence() = runTest {
+        migrationHelper.createDatabase(OCCURRENCE_MIGRATION_DATABASE_NAME, 3).apply {
+            execSQL(
+                """
+                INSERT INTO experience_profile (
+                    profile_id, workspace_name, workspace_kind, service_instance_date,
+                    selected_community_option_id, charter_purpose, charter_participants,
+                    charter_authority_limits, charter_decision_process, charter_role_terms,
+                    charter_accessibility_commitment, charter_effective_date, charter_review_date,
+                    charter_version, charter_adopted, practice_adoption_option_id,
+                    practice_adoption_scope, practice_adoption_effective_date,
+                    practice_adoption_review_date, practice_adoption_recorded_by,
+                    legacy_datastore_migrated
+                ) VALUES (
+                    1, 'Harimon', 'qahal', '2026-10-10', NULL,
+                    '', '', '', '', '', '', '', '', 'Draft 1', 0,
+                    NULL, '', '', '', '', 1
+                )
+                """.trimIndent(),
+            )
+            execSQL(
+                "INSERT INTO experience_role_assignment VALUES (1, 'leader', 'Ari')",
+            )
+            execSQL(
+                "INSERT INTO experience_reading_assignment VALUES (1, 'reading.1', 'Miriam')",
+            )
+            execSQL(
+                """
+                INSERT INTO experience_reading_plan VALUES (
+                    1, 'reading.1', '', '', '', 'Miriam', '', 'READY', 0, ''
+                )
+                """.trimIndent(),
+            )
+            execSQL(
+                "INSERT INTO experience_record_marker VALUES " +
+                    "(1, 'completed_service_segment', 'segment.gather')",
+            )
+            execSQL(
+                "INSERT INTO experience_record_marker VALUES " +
+                    "(1, 'saved_practice_card', 'practice.saved')",
+            )
+            close()
+        }
+
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val migrated = Room.databaseBuilder(
+            context,
+            OperationalDatabase::class.java,
+            OCCURRENCE_MIGRATION_DATABASE_NAME,
+        )
+            .addMigrations(*OperationalDatabaseMigrations.all)
+            .build()
+        try {
+            val snapshot = checkNotNull(migrated.experienceStateDao().snapshot())
+            val legacyId = "legacy-date:2026-10-10"
+
+            assertEquals(legacyId, snapshot.profile.serviceInstanceId)
+            assertEquals("2026-10-10", snapshot.profile.serviceInstanceDate)
+            assertEquals(
+                legacyId to "2026-10-10",
+                snapshot.serviceInstances.single().let { instance ->
+                    instance.serviceInstanceId to instance.serviceInstanceDate
+                },
+            )
+            assertEquals(legacyId, snapshot.roleAssignments.single().serviceInstanceId)
+            assertEquals("Ari", snapshot.roleAssignments.single().assigneeName)
+            assertEquals(legacyId, snapshot.readingPlans.single().serviceInstanceId)
+            assertEquals(
+                setOf("completed_service_segment" to "segment.gather"),
+                snapshot.serviceRecordMarkers.map { marker ->
+                    marker.recordType to marker.recordId
+                }.toSet(),
+            )
+            assertEquals(
+                setOf("saved_practice_card" to "practice.saved"),
+                snapshot.recordMarkers.map { marker ->
+                    marker.recordType to marker.recordId
+                }.toSet(),
+            )
+
+            val scheduledId =
+                "dev.service.shabbat.morning@2026-10-10#dev.opinion.israel"
+            migrated.experienceStateDao().activateServiceInstance(
+                scheduledId,
+                "2026-10-10",
+            )
+            val adopted = checkNotNull(migrated.experienceStateDao().snapshot())
+            assertEquals(scheduledId, adopted.profile.serviceInstanceId)
+            assertEquals(
+                setOf(legacyId, scheduledId),
+                adopted.serviceInstances.map { it.serviceInstanceId }.toSet(),
+            )
+            assertEquals(legacyId, adopted.roleAssignments.single().serviceInstanceId)
+            assertEquals(legacyId, adopted.readingPlans.single().serviceInstanceId)
+            assertEquals(legacyId, adopted.serviceRecordMarkers.single().serviceInstanceId)
+        } finally {
+            migrated.close()
+        }
+    }
+
     private fun identity(version: String, digestCharacter: Char) = InstalledPackIdentity(
         packId = "aseh.core",
         immutableVersion = version,
@@ -248,5 +442,7 @@ class OperationalDatabaseTest {
     private companion object {
         const val MIGRATION_DATABASE_NAME = "operational-migration-test.db"
         const val SERVICE_MIGRATION_DATABASE_NAME = "operational-service-migration-test.db"
+        const val OCCURRENCE_MIGRATION_DATABASE_NAME = "operational-occurrence-migration-test.db"
+        const val WORKSPACE_MIGRATION_DATABASE_NAME = "operational-workspace-migration-test.db"
     }
 }

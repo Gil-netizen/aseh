@@ -7,8 +7,8 @@ import java.time.LocalTime
  * Non-sacred scheduling fixtures for development and UI integration.
  *
  * Titles identify service choices, but this catalog contains no prayers, readings, citations,
- * translations, liturgical ordering, or normative calendar rulings. Every definition is marked
- * planning-only so it cannot be mistaken for approved conductable content.
+ * translations, liturgical ordering, or normative calendar rulings. Shabbat morning exposes an
+ * operational rehearsal capability while its liturgical content remains planning-only.
  */
 object SyntheticDevelopmentServiceCatalog {
     const val ISRAEL_PROFILE_ID = "dev.profile.israel"
@@ -85,6 +85,9 @@ object SyntheticDevelopmentServiceCatalog {
                     kind = PreparationHorizonKind.BEFORE_SHABBAT,
                     leadDays = 2,
                     title = text("preparation_before_shabbat", "Prepare before Shabbat"),
+                ),
+                operationalCapabilities = setOf(
+                    ServiceOperationalCapability.SHABBAT_MORNING_REHEARSAL,
                 ),
             ),
             definition(
@@ -178,6 +181,7 @@ object SyntheticDevelopmentServiceCatalog {
         start: LocalTime,
         durationMinutes: Long,
         preparation: PreparationPolicy,
+        operationalCapabilities: Set<ServiceOperationalCapability> = emptySet(),
     ): ServiceDefinition = ServiceDefinition(
         id = id,
         title = text("${id.replace('.', '_')}_title", title),
@@ -193,6 +197,7 @@ object SyntheticDevelopmentServiceCatalog {
                 "Reviewed service content is not installed; this development definition provides schedule and preparation metadata only.",
             ),
         ),
+        operationalCapabilities = operationalCapabilities,
     )
 
     private fun text(key: String, fallback: String): UserFacingText = UserFacingText(key, fallback)

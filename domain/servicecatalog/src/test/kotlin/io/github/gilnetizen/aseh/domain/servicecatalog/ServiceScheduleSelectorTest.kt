@@ -67,6 +67,11 @@ class ServiceScheduleSelectorTest {
         assertEquals(PreparationHorizonKind.BEFORE_SHABBAT, next.preparationHorizon.kind)
         assertEquals(LocalDate.parse("2026-10-08"), next.preparationHorizon.opensAt.toLocalDate())
         assertEquals(PreparationHorizonState.ACTIVE, next.preparationHorizon.state)
+        assertEquals(ServiceAvailabilityStatus.PLANNING_ONLY, next.availability.status)
+        assertTrue(
+            ServiceOperationalCapability.SHABBAT_MORNING_REHEARSAL in
+                next.definition.operationalCapabilities,
+        )
         assertEquals(listOf("dev.calendar-context.shabbat"), next.calendarAdditions.map(CalendarAddition::id))
     }
 

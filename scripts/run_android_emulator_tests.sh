@@ -486,8 +486,8 @@ fi
 # that exact package so a repeated local run starts from the same state as CI.
 wait_for_android_services
 for stale_test_package in \
-  io.github.gilnetizen.aseh.dev.alpha7.debug \
-  io.github.gilnetizen.aseh.dev.alpha7.debug.test \
+  io.github.gilnetizen.aseh.dev.alpha8.debug \
+  io.github.gilnetizen.aseh.dev.alpha8.debug.test \
   androidx.test.services; do
   adb uninstall "${stale_test_package}" >/dev/null 2>&1 || true
 done

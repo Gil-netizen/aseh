@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="feature_now_functional_review_title">&#x2066;EN · Alpha 7 functional review&#x2069;</string>
+    <string name="feature_now_functional_review_title">&#x2066;EN · Alpha 8 functional review&#x2069;</string>
     <string name="feature_now_functional_review_body">&#x2066;EN · This build includes interactive preparation guides, a service chooser and conductor, offline source search, role and reading assignments, local governance records, and packet share/print.&#x2069;</string>
     <string name="feature_now_functional_open_prayer">&#x2066;EN · Open service conductor&#x2069;</string>
     <string name="feature_now_functional_open_practice">&#x2066;EN · Open preparation guides&#x2069;</string>

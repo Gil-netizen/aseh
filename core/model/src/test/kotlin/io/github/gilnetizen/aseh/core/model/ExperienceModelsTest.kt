@@ -47,10 +47,13 @@ class ExperienceModelsTest {
     }
 
     @Test
-    fun `service instance rollover fails closed without erasing durable workspace data`() {
+    fun `different service occurrence fails closed without erasing durable workspace data`() {
         val previousDate = LocalDate.of(2026, 10, 10)
         val nextDate = LocalDate.of(2026, 10, 17)
+        val previous = ServiceInstanceKey("service@2026-10-10#israel", previousDate)
+        val next = ServiceInstanceKey("service@2026-10-17#israel", nextDate)
         val state = ExperienceState(
+            serviceInstanceId = previous.occurrenceId,
             serviceInstanceDate = previousDate,
             completedPracticeStepIds = setOf("practice.weekly"),
             savedPracticeCardIds = setOf("practice.saved"),
@@ -70,9 +73,10 @@ class ExperienceModelsTest {
             reviewedDossierFactIds = setOf("dossier.fact.saved"),
         )
 
-        assertEquals(state, state.forServiceInstance(previousDate))
+        assertEquals(state, state.forServiceInstance(previous))
 
-        val rolled = state.forServiceInstance(nextDate)
+        val rolled = state.forServiceInstance(next)
+        assertEquals(next.occurrenceId, rolled.serviceInstanceId)
         assertEquals(nextDate, rolled.serviceInstanceDate)
         assertTrue(rolled.completedPracticeStepIds.isEmpty())
         assertTrue(rolled.completedPreflightStepIds.isEmpty())

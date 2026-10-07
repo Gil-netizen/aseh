@@ -56,6 +56,8 @@ import io.github.gilnetizen.aseh.core.model.SourceUnit
 fun PracticeScreen(
     catalog: DemonstratorCatalog? = null,
     state: ExperienceState = ExperienceState(),
+    occurrenceProgressEnabled: Boolean = true,
+    occurrenceProgressActivating: Boolean = false,
     requestedCardId: String? = null,
     onRequestedCardConsumed: () -> Unit = {},
     onStepCompleted: (String, Boolean) -> Unit = { _, _ -> },
@@ -81,6 +83,8 @@ fun PracticeScreen(
             catalog = catalog,
             card = selectedCard,
             state = state,
+            occurrenceProgressEnabled = occurrenceProgressEnabled,
+            occurrenceProgressActivating = occurrenceProgressActivating,
             onBack = { selectedCardId = null },
             onStepCompleted = onStepCompleted,
             onCardSaved = onCardSaved,
@@ -92,6 +96,8 @@ fun PracticeScreen(
         PracticeCatalog(
             catalog = catalog,
             state = state,
+            occurrenceProgressEnabled = occurrenceProgressEnabled,
+            occurrenceProgressActivating = occurrenceProgressActivating,
             onCardSelected = { selectedCardId = it },
             onOpenPrayer = onOpenPrayer,
             modifier = modifier,
@@ -103,6 +109,8 @@ fun PracticeScreen(
 private fun PracticeCatalog(
     catalog: DemonstratorCatalog?,
     state: ExperienceState,
+    occurrenceProgressEnabled: Boolean,
+    occurrenceProgressActivating: Boolean,
     onCardSelected: (String) -> Unit,
     onOpenPrayer: () -> Unit,
     modifier: Modifier = Modifier,
@@ -137,6 +145,12 @@ private fun PracticeCatalog(
 
         item(key = "practice-notice") {
             DevelopmentContentNotice(catalog)
+        }
+
+        if (catalog != null && !occurrenceProgressEnabled) {
+            item(key = "practice-progress-unavailable") {
+                OccurrenceProgressUnavailableNotice(occurrenceProgressActivating)
+            }
         }
 
         if (catalog == null) {
@@ -350,6 +364,8 @@ private fun PracticeCardDetail(
     catalog: DemonstratorCatalog,
     card: PracticeCard,
     state: ExperienceState,
+    occurrenceProgressEnabled: Boolean,
+    occurrenceProgressActivating: Boolean,
     onBack: () -> Unit,
     onStepCompleted: (String, Boolean) -> Unit,
     onCardSaved: (String, Boolean) -> Unit,
@@ -386,6 +402,12 @@ private fun PracticeCardDetail(
 
         item(key = "practice-detail-notice") {
             DevelopmentContentNotice(catalog)
+        }
+
+        if (!occurrenceProgressEnabled) {
+            item(key = "practice-detail-progress-unavailable") {
+                OccurrenceProgressUnavailableNotice(occurrenceProgressActivating)
+            }
         }
 
         item(key = "practice-detail-heading") {
@@ -450,6 +472,7 @@ private fun PracticeCardDetail(
                 PracticeStepToggle(
                     step = step,
                     completed = step.id in state.completedPracticeStepIds,
+                    enabled = occurrenceProgressEnabled,
                     onCompletedChange = { onStepCompleted(step.id, it) },
                 )
             }
@@ -602,6 +625,7 @@ private fun PracticeCardDetail(
 private fun PracticeStepToggle(
     step: PracticeStep,
     completed: Boolean,
+    enabled: Boolean,
     onCompletedChange: (Boolean) -> Unit,
 ) {
     Surface(
@@ -618,6 +642,7 @@ private fun PracticeStepToggle(
                 .semantics(mergeDescendants = true) {}
                 .toggleable(
                     value = completed,
+                    enabled = enabled,
                     role = Role.Checkbox,
                     onValueChange = onCompletedChange,
                 )
@@ -628,6 +653,7 @@ private fun PracticeStepToggle(
             Checkbox(
                 checked = completed,
                 onCheckedChange = null,
+                enabled = enabled,
                 modifier = Modifier.clearAndSetSemantics {},
             )
             Column(
@@ -643,6 +669,42 @@ private fun PracticeStepToggle(
                     style = MaterialTheme.typography.bodyLarge,
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun OccurrenceProgressUnavailableNotice(activating: Boolean) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("practice-progress-unavailable"),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = stringResource(
+                    if (activating) {
+                        R.string.feature_practice_progress_activating_title
+                    } else {
+                        R.string.feature_practice_progress_unavailable_title
+                    },
+                ),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = stringResource(
+                    if (activating) {
+                        R.string.feature_practice_progress_activating_body
+                    } else {
+                        R.string.feature_practice_progress_unavailable_body
+                    },
+                ),
+                style = MaterialTheme.typography.bodyLarge,
+            )
         }
     }
 }

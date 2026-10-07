@@ -129,5 +129,5 @@ class LocalUserDataDeletionIntegrationTest {
   )
 
   private fun ExperienceState.withoutDerivedServiceDate(): ExperienceState =
-    copy(serviceInstanceDate = null)
+    copy(serviceInstanceId = null, serviceInstanceDate = null)
 }

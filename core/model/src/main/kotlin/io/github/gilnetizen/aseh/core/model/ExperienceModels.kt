@@ -259,7 +259,37 @@ data class DemonstratorCatalog(
     val disputedPracticeDossier: DisputedPracticeDossier? = null,
 )
 
+/**
+ * Stable identity for one scheduled service occurrence.
+ *
+ * The civil date remains explicit because it is presentation and calendar context, while
+ * [occurrenceId] distinguishes services and opinion profiles that can share that date.
+ */
+data class ServiceInstanceKey(
+    val occurrenceId: String,
+    val serviceDate: LocalDate,
+) {
+    init {
+        require(occurrenceId.isNotBlank()) { "A service occurrence ID must not be blank" }
+        require(occurrenceId == occurrenceId.trim()) {
+            "A service occurrence ID must not have surrounding whitespace"
+        }
+        require(occurrenceId.length <= MAX_SERVICE_OCCURRENCE_ID_LENGTH) {
+            "A service occurrence ID must be $MAX_SERVICE_OCCURRENCE_ID_LENGTH characters or fewer"
+        }
+    }
+
+    companion object {
+        /** Preserves version-3 date-scoped data without pretending it belonged to a known plan. */
+        fun legacyDateOnly(serviceDate: LocalDate): ServiceInstanceKey = ServiceInstanceKey(
+            occurrenceId = "legacy-date:$serviceDate",
+            serviceDate = serviceDate,
+        )
+    }
+}
+
 data class ExperienceState(
+    val serviceInstanceId: String? = null,
     val serviceInstanceDate: LocalDate? = null,
     val selectedServicePlanId: String? = null,
     val completedPracticeStepIds: Set<String> = emptySet(),
@@ -281,31 +311,45 @@ data class ExperienceState(
     val communityCharter: CommunityCharter = CommunityCharter(),
     val disputedPracticeAdoption: CommunityAdoption = CommunityAdoption(),
     val reviewedDossierFactIds: Set<String> = emptySet(),
-)
+) {
+    val serviceInstanceKey: ServiceInstanceKey?
+        get() {
+            val id = serviceInstanceId ?: return null
+            val date = serviceInstanceDate ?: return null
+            return runCatching { ServiceInstanceKey(id, date) }.getOrNull()
+        }
+}
 
 /**
- * Returns the state that is safe to show for [serviceDate].
+ * Returns the state that is safe to show for [serviceInstance].
  *
- * A missing or different persisted service date means the weekly preparation, reading plan, and
- * conductor progress have unknown provenance. Those fields therefore fail closed until the
- * repository atomically activates the requested service instance. Workspace identity, saved
- * material, and community governance records intentionally survive the rollover. Current role
- * assignments do not: the model does not yet distinguish a durable roster from service roles.
+ * A missing or different occurrence ID means the preparation, reading plan, and conductor
+ * progress belong to another occurrence, even when both occurrences share a civil date. Those
+ * fields therefore fail closed until the repository activates the requested occurrence.
  */
-fun ExperienceState.forServiceInstance(serviceDate: LocalDate): ExperienceState =
-    if (serviceInstanceDate == serviceDate) {
+fun ExperienceState.forServiceInstance(serviceInstance: ServiceInstanceKey): ExperienceState =
+    if (serviceInstanceKey == serviceInstance) {
         this
     } else {
-        copy(
-            serviceInstanceDate = serviceDate,
-            completedPracticeStepIds = emptySet(),
-            completedPreflightStepIds = emptySet(),
-            completedServiceSegmentIds = emptySet(),
-            roleAssignments = emptyMap(),
-            readingAssignments = emptyMap(),
-            readingPlans = emptyMap(),
+        withoutServiceInstanceProgress().copy(
+            serviceInstanceId = serviceInstance.occurrenceId,
+            serviceInstanceDate = serviceInstance.serviceDate,
         )
     }
+
+/** Returns durable state while hiding all data owned by a service occurrence. */
+fun ExperienceState.withoutServiceInstanceProgress(): ExperienceState = copy(
+    serviceInstanceId = null,
+    serviceInstanceDate = null,
+    completedPracticeStepIds = emptySet(),
+    completedPreflightStepIds = emptySet(),
+    completedServiceSegmentIds = emptySet(),
+    roleAssignments = emptyMap(),
+    readingAssignments = emptyMap(),
+    readingPlans = emptyMap(),
+)
+
+private const val MAX_SERVICE_OCCURRENCE_ID_LENGTH = 512
 
 fun nextShabbat(from: LocalDate): LocalDate {
     val days = (DayOfWeek.SATURDAY.value - from.dayOfWeek.value + 7) % 7

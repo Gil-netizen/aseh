@@ -163,6 +163,84 @@ class LocalWorkspaceApiTest {
         )
     }
 
+    @Test
+    fun granularEditorCommandPreservesAnUnrelatedChangeAppliedAfterTheFormOpened() {
+        val household = snapshot.households.single()
+        val calendarItem = household.calendarItems.single()
+        val newResponsibility = HouseholdResponsibility(
+            id = WorkspaceRecordId("local.responsibility.race"),
+            label = "Arrange transportation",
+            dueOn = date("2026-10-12"),
+            statusChangedOn = date("2026-10-07"),
+        )
+        val commandCreatedFromStaleForm = WorkspaceCommand.PutHouseholdResponsibility(
+            householdId = household.id,
+            responsibility = newResponsibility,
+        )
+        val concurrentlyChanged = LocalWorkspaceApi.apply(
+            snapshot,
+            WorkspaceCommand.ChangeCalendarItemStatus(
+                householdId = household.id,
+                id = calendarItem.id,
+                target = CalendarItemStatus.COMPLETED,
+                changedOn = date("2026-10-10"),
+            ),
+        ).applied()
+
+        val result = LocalWorkspaceApi.apply(concurrentlyChanged, commandCreatedFromStaleForm).applied()
+
+        assertEquals(CalendarItemStatus.COMPLETED, result.households.single().calendarItems.single().status)
+        assertEquals(newResponsibility, result.households.single().responsibilities.last())
+    }
+
+    @Test
+    fun staleEditorsPreserveConcurrentLifecycleChangesAndNestedChildren() {
+        val household = snapshot.households.single()
+        val responsibility = household.responsibilities.single()
+        val kit = household.preparationKits.single()
+        val lifecycleChanged = LocalWorkspaceApi.apply(
+            snapshot,
+            WorkspaceCommand.ChangeResponsibilityStatus(
+                householdId = household.id,
+                id = responsibility.id,
+                target = WorkItemStatus.DONE,
+                changedOn = date("2026-10-09"),
+            ),
+        ).applied()
+        val newTask = PreparationKitTask(
+            id = WorkspaceRecordId("local.task.concurrent"),
+            label = "Concurrent task",
+            dueOn = date("2026-10-12"),
+            statusChangedOn = date("2026-10-08"),
+        )
+        val childAdded = LocalWorkspaceApi.apply(
+            lifecycleChanged,
+            WorkspaceCommand.PutPreparationKitTask(household.id, kit.id, newTask),
+        ).applied()
+
+        val responsibilitySaved = LocalWorkspaceApi.apply(
+            childAdded,
+            WorkspaceCommand.PutHouseholdResponsibility(
+                household.id,
+                responsibility.copy(label = "Edited label"),
+            ),
+        ).applied()
+        val kitSaved = LocalWorkspaceApi.apply(
+            responsibilitySaved,
+            WorkspaceCommand.PutHouseholdPreparationKit(
+                household.id,
+                kit.copy(label = "Edited kit"),
+            ),
+        ).applied()
+
+        val savedHousehold = kitSaved.households.single()
+        val savedResponsibility = savedHousehold.responsibilities.single { it.id == responsibility.id }
+        assertEquals("Edited label", savedResponsibility.label)
+        assertEquals(WorkItemStatus.DONE, savedResponsibility.status)
+        assertEquals(date("2026-10-09"), savedResponsibility.statusChangedOn)
+        assertTrue(savedHousehold.preparationKits.single().tasks.any { it.id == newTask.id })
+    }
+
     private fun date(value: String): LocalDate = LocalDate.parse(value)
 
     private fun WorkspaceUpdateResult.applied(): WorkspaceSnapshot =

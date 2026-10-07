@@ -8,7 +8,7 @@ import org.junit.Test
 
 class ServiceCatalogModelsTest {
     @Test
-    fun developmentCatalogCoversWeekdayShabbatAndFestivalWithoutConductableContent() {
+    fun developmentCatalogSeparatesRehearsalCapabilityFromUnavailableLiturgicalContent() {
         val catalog = SyntheticDevelopmentServiceCatalog.catalog
 
         assertEquals(CatalogMaturity.DEVELOPMENT_SYNTHETIC, catalog.maturity)
@@ -18,6 +18,16 @@ class ServiceCatalogModelsTest {
         )
         assertTrue(catalog.serviceDefinitions.size > ServiceDayKind.entries.size)
         assertTrue(catalog.serviceDefinitions.all { it.contentState is ServiceContentState.MetadataOnly })
+        assertEquals(
+            setOf("dev.service.shabbat.morning"),
+            catalog.serviceDefinitions
+                .filter { definition ->
+                    ServiceOperationalCapability.SHABBAT_MORNING_REHEARSAL in
+                        definition.operationalCapabilities
+                }
+                .map(ServiceDefinition::id)
+                .toSet(),
+        )
         assertTrue(catalog.notice.fallbackEnglish.contains("no prayer or Torah text"))
         assertEquals(
             setOf(CalendarRegion.ISRAEL, CalendarRegion.DIASPORA),

@@ -23,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -55,6 +56,7 @@ import io.github.gilnetizen.aseh.core.model.ServiceCoordinates
 import io.github.gilnetizen.aseh.core.model.ServiceDateContext
 import io.github.gilnetizen.aseh.core.model.ServiceDayKind
 import io.github.gilnetizen.aseh.core.model.ServiceHebrewDateContext
+import io.github.gilnetizen.aseh.core.model.ServiceInstanceKey
 import io.github.gilnetizen.aseh.core.model.ServicePlaceAvailability
 import io.github.gilnetizen.aseh.core.model.ServiceSolarEvent
 import io.github.gilnetizen.aseh.core.model.ServiceSolarEventKind
@@ -67,6 +69,7 @@ import io.github.gilnetizen.aseh.core.model.practiceProgress
 import io.github.gilnetizen.aseh.core.model.serviceAssemblyContext
 import io.github.gilnetizen.aseh.core.model.serviceDateLabel
 import io.github.gilnetizen.aseh.core.model.serviceProgress
+import io.github.gilnetizen.aseh.core.model.withoutServiceInstanceProgress
 import io.github.gilnetizen.aseh.core.ui.AsehAdaptiveNavigationShell
 import io.github.gilnetizen.aseh.core.ui.AsehDestination
 import io.github.gilnetizen.aseh.feature.build.BuildScreen
@@ -94,20 +97,32 @@ import io.github.gilnetizen.aseh.domain.zmanim.ZmanimRequest
 import io.github.gilnetizen.aseh.domain.calendar.CalendarContextRangeRequest
 import io.github.gilnetizen.aseh.domain.calendar.KosherJavaCalendarContextEngine
 import io.github.gilnetizen.aseh.domain.servicecatalog.CalendarRegion as ServiceCalendarRegion
+import io.github.gilnetizen.aseh.domain.servicecatalog.DatedServiceInstance
 import io.github.gilnetizen.aseh.domain.servicecatalog.ServiceScheduleSelector
 import io.github.gilnetizen.aseh.domain.servicecatalog.ServiceCatalog
+import io.github.gilnetizen.aseh.domain.servicecatalog.ServiceDayKind as ScheduledServiceDayKind
+import io.github.gilnetizen.aseh.domain.servicecatalog.ServiceKind
+import io.github.gilnetizen.aseh.domain.servicecatalog.ServiceOperationalCapability
 import io.github.gilnetizen.aseh.domain.servicecatalog.ServiceSelectionRequest
 import io.github.gilnetizen.aseh.domain.servicecatalog.ServiceSelectionResult
+import io.github.gilnetizen.aseh.domain.servicecatalog.ServiceTemporalState
 import io.github.gilnetizen.aseh.domain.workspace.DueTiming
 import io.github.gilnetizen.aseh.domain.workspace.LocalWorkspaceApi
 import io.github.gilnetizen.aseh.domain.workspace.WorkspaceOperationResult
 import io.github.gilnetizen.aseh.domain.workspace.WorkspaceIssue
+import io.github.gilnetizen.aseh.domain.workspace.WorkspaceRecordAddress
+import io.github.gilnetizen.aseh.domain.workspace.WorkspaceRecordId
+import io.github.gilnetizen.aseh.domain.workspace.WorkspaceRecordKind
+import io.github.gilnetizen.aseh.domain.workspace.WorkspaceId
 import io.github.gilnetizen.aseh.domain.workspace.WorkspaceSnapshot
 import io.github.gilnetizen.aseh.domain.workspace.WorkspaceUpdateResult
 import java.time.Clock
 import java.time.Duration
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -167,9 +182,16 @@ fun AsehApp(
   var openPlaceEditorRequest by rememberSaveable { mutableIntStateOf(0) }
   var requestedPracticeCardId by rememberSaveable { mutableStateOf<String?>(null) }
   var requestedStudySourceId by rememberSaveable { mutableStateOf<String?>(null) }
+  var requestedWorkspaceId by rememberSaveable { mutableStateOf<String?>(null) }
+  var requestedWorkspaceRecordId by rememberSaveable { mutableStateOf<String?>(null) }
+  var requestedWorkspaceParentRecordId by rememberSaveable { mutableStateOf<String?>(null) }
+  var requestedWorkspaceRecordKind by rememberSaveable { mutableStateOf<String?>(null) }
+  var activeWorkspaceIdOverride by rememberSaveable { mutableStateOf<String?>(null) }
   var globalSearchOpen by rememberSaveable { mutableStateOf(false) }
   var contextChooserOpen by rememberSaveable { mutableStateOf(false) }
   var serviceSetupSelected by rememberSaveable { mutableStateOf(false) }
+  var workspaceEditorOpen by rememberSaveable { mutableStateOf(false) }
+  var dismissWorkspaceEditorRequest by rememberSaveable { mutableIntStateOf(0) }
   var workspaceRejectedIssues by remember { mutableStateOf<List<WorkspaceIssue>>(emptyList()) }
   var workspacePersistenceFailed by remember { mutableStateOf(false) }
   var selectedScheduledServiceIdOverride by rememberSaveable { mutableStateOf<String?>(null) }
@@ -326,6 +348,7 @@ fun AsehApp(
       return@navigate
     }
     selectedDestinationOverride = destination.persistedId
+    if (destination != AsehDestination.BUILD) workspaceEditorOpen = false
     if (destination != AsehDestination.NOW) {
       openPlaceEditorRequest = 0
       locationRequestJob?.cancel()
@@ -341,9 +364,21 @@ fun AsehApp(
     }
   }
   BackHandler(
-    enabled = isDeletingLocalUserData || selectedDestination != AsehDestination.NOW,
+    enabled = isDeletingLocalUserData ||
+      workspaceEditorOpen ||
+      selectedDestination != AsehDestination.NOW,
   ) {
-    if (!isDeletingLocalUserData) navigateTo(AsehDestination.NOW)
+    if (!isDeletingLocalUserData) {
+      when {
+        selectedDestination == AsehDestination.BUILD && workspaceEditorOpen -> {
+          dismissWorkspaceEditorRequest += 1
+        }
+        selectedDestination == AsehDestination.BUILD && serviceSetupSelected -> {
+          serviceSetupSelected = false
+        }
+        else -> navigateTo(AsehDestination.NOW)
+      }
+    }
   }
   val experienceZone = storedManualPlaceContext?.timeZoneId?.let(ZoneId::of) ?: deviceTimeZone()
   var serviceScheduleInstant by remember(clock) { mutableStateOf(clock.instant()) }
@@ -376,22 +411,165 @@ fun AsehApp(
     lifecycleOwner.lifecycle.addObserver(observer)
     onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
   }
-  val experienceServiceDate = nextShabbat(experienceLocalDate)
-  val experienceState = remember(persistedExperienceState, experienceServiceDate) {
-    persistedExperienceState.forServiceInstance(experienceServiceDate)
+  val serviceScheduleSelector = remember(serviceCatalog) {
+    serviceCatalog?.let(::ServiceScheduleSelector)
   }
-  val activeWorkspaceContext = remember(workspaceSnapshot, experienceState.workspaceKind) {
-    when (experienceState.workspaceKind) {
-      WorkspaceKind.SELF -> workspaceSnapshot.selfWorkspaces.firstOrNull()?.let { workspace ->
+  val localCalendarContextEngine = remember { KosherJavaCalendarContextEngine() }
+  val serviceCalendarRegion = when (persistedExperienceState.calendarRegion) {
+    CalendarRegion.ISRAEL -> ServiceCalendarRegion.ISRAEL
+    CalendarRegion.DIASPORA -> ServiceCalendarRegion.DIASPORA
+    CalendarRegion.UNSPECIFIED -> null
+  }
+  val calendarContextRange = remember(
+    localCalendarContextEngine,
+    experienceLocalDate,
+    serviceCalendarRegion,
+  ) {
+    serviceCalendarRegion?.let { region ->
+      localCalendarContextEngine.resolveRange(
+        CalendarContextRangeRequest(
+          startDate = experienceLocalDate,
+          endDateInclusive = experienceLocalDate.plusDays(
+            ServiceSelectionRequest.DEFAULT_LOOK_AHEAD_DAYS.toLong(),
+          ),
+          calendarRegion = region,
+        ),
+      )
+    }
+  }
+  // An incomplete local-calendar range must not silently fall back to the
+  // development Saturday/weekday classifier in ServiceScheduleSelector.
+  val calendarOverrides = calendarContextRange
+    ?.takeIf { range -> range.unavailableDays.isEmpty() }
+    ?.serviceCatalogOverrides
+  val serviceOpinionProfileId = when (persistedExperienceState.calendarRegion) {
+    CalendarRegion.ISRAEL -> serviceCatalog?.opinionProfiles
+      ?.firstOrNull { profile -> profile.calendarRegion.name == CalendarRegion.ISRAEL.name }
+      ?.id
+    CalendarRegion.DIASPORA -> serviceCatalog?.opinionProfiles
+      ?.firstOrNull { profile -> profile.calendarRegion.name == CalendarRegion.DIASPORA.name }
+      ?.id
+    CalendarRegion.UNSPECIFIED -> null
+  }
+  val serviceSelection = remember(
+    serviceScheduleSelector,
+    serviceScheduleInstant,
+    storedManualPlaceContext?.timeZoneId,
+    serviceOpinionProfileId,
+    calendarOverrides,
+    calendarContextRange?.unavailableDays,
+  ) {
+    serviceScheduleSelector?.takeIf {
+      calendarContextRange == null || calendarOverrides != null
+    }?.select(
+      ServiceSelectionRequest(
+        now = serviceScheduleInstant,
+        zoneId = storedManualPlaceContext?.timeZoneId?.let(ZoneId::of),
+        opinionProfileId = serviceOpinionProfileId,
+        calendarOverrides = calendarOverrides.orEmpty(),
+      ),
+    )
+  }
+  val requestedScheduledServiceId =
+    selectedScheduledServiceIdOverride ?: persistedExperienceState.selectedServicePlanId
+  val selectedScheduledService = remember(serviceSelection, requestedScheduledServiceId) {
+    selectScheduledService(
+      selection = serviceSelection,
+      requestedServiceId = requestedScheduledServiceId,
+    )
+  }
+  val selectedScheduledServiceId =
+    selectedScheduledService?.id ?: requestedScheduledServiceId
+  val selectedServiceInstanceKey = selectedScheduledService
+    ?.rehearsalServiceInstanceKeyOrNull()
+  val selectedServiceSupportsRehearsal = selectedServiceInstanceKey != null
+  val writableServiceInstanceKey = writableServiceInstanceKey(
+    selected = selectedServiceInstanceKey,
+    persistedActive = persistedExperienceState.serviceInstanceKey,
+  )
+  val selectedServiceOccurrenceReady = writableServiceInstanceKey != null
+  val selectedServiceOccurrenceActivating =
+    selectedServiceSupportsRehearsal && !selectedServiceOccurrenceReady
+  val selectedServiceWriteKey = remember { AtomicReference<ServiceInstanceKey?>(null) }
+  SideEffect {
+    selectedServiceWriteKey.set(writableServiceInstanceKey)
+  }
+  LaunchedEffect(
+    serviceSelection,
+    requestedScheduledServiceId,
+    persistedExperienceState.selectedServicePlanId,
+  ) {
+    val defaultServiceId = selectedScheduledService?.id
+    val requestedIsAvailable = (serviceSelection as? ServiceSelectionResult.Available)
+      ?.agenda
+      ?.upcomingServices
+      .orEmpty()
+      .any { service -> service.id == requestedScheduledServiceId }
+    if (defaultServiceId != null && !requestedIsAvailable) {
+      selectedServiceWriteKey.set(null)
+      selectedScheduledServiceIdOverride = defaultServiceId
+      if (persistedExperienceState.selectedServicePlanId != defaultServiceId) {
+        launchUserDataMutation {
+          experienceStateRepository?.setSelectedServicePlan(defaultServiceId)
+        }
+      }
+    }
+  }
+  val experienceServiceDate = selectedScheduledService?.serviceDate
+    ?: nextShabbat(experienceLocalDate)
+  val occurrenceExperienceState = remember(
+    persistedExperienceState,
+    selectedServiceInstanceKey,
+  ) {
+    selectedServiceInstanceKey?.let(persistedExperienceState::forServiceInstance)
+      ?: persistedExperienceState.withoutServiceInstanceProgress()
+  }
+  val activeWorkspaceContext = remember(
+    workspaceSnapshot,
+    occurrenceExperienceState.workspaceKind,
+    activeWorkspaceIdOverride,
+  ) {
+    val requestedId = activeWorkspaceIdOverride?.let(::WorkspaceId)
+    when (occurrenceExperienceState.workspaceKind) {
+      WorkspaceKind.SELF -> (
+        workspaceSnapshot.selfWorkspaces.firstOrNull { it.id == requestedId }
+          ?: workspaceSnapshot.selfWorkspaces.firstOrNull()
+        )?.let { workspace ->
         ActiveWorkspaceContext.Self(workspace.id)
       }
-      WorkspaceKind.HOUSEHOLD -> workspaceSnapshot.households.firstOrNull()?.let { workspace ->
+      WorkspaceKind.HOUSEHOLD -> (
+        workspaceSnapshot.households.firstOrNull { it.id == requestedId }
+          ?: workspaceSnapshot.households.firstOrNull()
+        )?.let { workspace ->
         ActiveWorkspaceContext.Household(workspace.id)
       }
-      WorkspaceKind.QAHAL -> workspaceSnapshot.qahalWorkspaces.firstOrNull()?.let { workspace ->
+      WorkspaceKind.QAHAL -> (
+        workspaceSnapshot.qahalWorkspaces.firstOrNull { it.id == requestedId }
+          ?: workspaceSnapshot.qahalWorkspaces.firstOrNull()
+        )?.let { workspace ->
         ActiveWorkspaceContext.Qahal(workspace.id)
       }
     }
+  }
+  val activeWorkspaceLabel = remember(workspaceSnapshot, activeWorkspaceContext) {
+    when (val active = activeWorkspaceContext) {
+      is ActiveWorkspaceContext.Self -> workspaceSnapshot.selfWorkspaces
+        .firstOrNull { workspace -> workspace.id == active.workspaceId }
+        ?.label
+      is ActiveWorkspaceContext.Household -> workspaceSnapshot.households
+        .firstOrNull { workspace -> workspace.id == active.workspaceId }
+        ?.label
+      is ActiveWorkspaceContext.Qahal -> workspaceSnapshot.qahalWorkspaces
+        .firstOrNull { workspace -> workspace.id == active.workspaceId }
+        ?.label
+      null -> null
+    }
+  }
+  val experienceState = remember(occurrenceExperienceState, activeWorkspaceLabel) {
+    activeWorkspaceLabel
+      ?.takeIf(String::isNotBlank)
+      ?.let { label -> occurrenceExperienceState.copy(workspaceName = label) }
+      ?: occurrenceExperienceState
   }
   val workspaceSummary = remember(
     workspaceReviewStateRepository,
@@ -425,25 +603,28 @@ fun AsehApp(
       }
     }
   }
-  val selectedScheduledServiceId =
-    selectedScheduledServiceIdOverride ?: experienceState.selectedServicePlanId
   LaunchedEffect(
     experienceStateRepository,
     manualPlaceContextReady,
-    experienceServiceDate,
-    persistedExperienceState.serviceInstanceDate,
+    selectedServiceInstanceKey,
+    persistedExperienceState.serviceInstanceKey,
   ) {
     if (
       manualPlaceContextReady &&
       experienceStateRepository != null &&
-      persistedExperienceState.serviceInstanceDate != experienceServiceDate
+      persistedExperienceState.serviceInstanceKey != selectedServiceInstanceKey
     ) {
       localUserDataMutationGate.mutate {
-        experienceStateRepository.activateServiceInstance(experienceServiceDate)
+        if (selectedServiceInstanceKey == null) {
+          experienceStateRepository.deactivateServiceInstance()
+        } else {
+          experienceStateRepository.activateServiceInstance(selectedServiceInstanceKey)
+        }
       }
     }
   }
-  val experienceDateLabel = serviceDateLabel(experienceLocalDate)
+  val experienceDateLabel = selectedScheduledService?.serviceDisplayLabel()
+    ?: serviceDateLabel(experienceLocalDate)
   val experienceLocationLabel = storedManualPlaceContext?.label
     ?.takeIf(String::isNotBlank)
     ?: if (storedManualPlaceContext?.source == PlaceContextSource.DEVICE) {
@@ -457,35 +638,37 @@ fun AsehApp(
       serviceDate = experienceServiceDate,
     )
   }
-  val experienceAssemblyContext = contentCatalog?.let { catalog ->
-    serviceAssemblyContext(
-      catalog = catalog,
-      state = experienceState,
-      date = ServiceDateContext(
-        civilDate = experienceServiceDate,
-        displayLabel = experienceDateLabel,
-        dayKind = ServiceDayKind.SHABBAT,
-        hebrewDate = serviceCalendarContext.hebrewDate,
-      ),
-      calendarRegion = experienceState.calendarRegion,
-      place = storedManualPlaceContext?.let { place ->
-        ServicePlaceAvailability.Available(
-          label = experienceLocationLabel,
-          timeZoneId = place.timeZoneId,
-          coordinates = ServiceCoordinates(
-            latitudeDegrees = place.latitudeDegrees,
-            longitudeDegrees = place.longitudeDegrees,
-            elevationMeters = place.elevationMeters,
-            horizontalAccuracyMeters = place.horizontalAccuracyMeters,
-          ),
-        )
-      } ?: ServicePlaceAvailability.Unavailable(
-        reason = "Use device location or save a manual fallback in Now.",
-      ),
-      accessibility = experienceState.accessibilityProfile,
-      zmanim = serviceCalendarContext.zmanim,
-    )
-  }
+  val experienceAssemblyContext = contentCatalog
+    ?.takeIf { selectedServiceSupportsRehearsal }
+    ?.let { catalog ->
+      serviceAssemblyContext(
+        catalog = catalog,
+        state = experienceState,
+        date = ServiceDateContext(
+          civilDate = experienceServiceDate,
+          displayLabel = experienceDateLabel,
+          dayKind = selectedScheduledService?.toCoreServiceDayKind() ?: ServiceDayKind.SHABBAT,
+          hebrewDate = serviceCalendarContext.hebrewDate,
+        ),
+        calendarRegion = experienceState.calendarRegion,
+        place = storedManualPlaceContext?.let { place ->
+          ServicePlaceAvailability.Available(
+            label = experienceLocationLabel,
+            timeZoneId = place.timeZoneId,
+            coordinates = ServiceCoordinates(
+              latitudeDegrees = place.latitudeDegrees,
+              longitudeDegrees = place.longitudeDegrees,
+              elevationMeters = place.elevationMeters,
+              horizontalAccuracyMeters = place.horizontalAccuracyMeters,
+            ),
+          )
+        } ?: ServicePlaceAvailability.Unavailable(
+          reason = "Use device location or save a manual fallback in Now.",
+        ),
+        accessibility = experienceState.accessibilityProfile,
+        zmanim = serviceCalendarContext.zmanim,
+      )
+    }
   val experienceAssembly = if (contentCatalog != null && experienceAssemblyContext != null) {
     assembleService(
       catalog = contentCatalog,
@@ -494,76 +677,6 @@ fun AsehApp(
     )
   } else {
     null
-  }
-  val serviceScheduleSelector = remember(serviceCatalog) {
-    serviceCatalog?.let(::ServiceScheduleSelector)
-  }
-  val localCalendarContextEngine = remember { KosherJavaCalendarContextEngine() }
-  val serviceCalendarRegion = when (experienceState.calendarRegion) {
-    CalendarRegion.ISRAEL -> ServiceCalendarRegion.ISRAEL
-    CalendarRegion.DIASPORA -> ServiceCalendarRegion.DIASPORA
-    CalendarRegion.UNSPECIFIED -> null
-  }
-  val calendarContextRange = remember(
-    localCalendarContextEngine,
-    experienceLocalDate,
-    serviceCalendarRegion,
-  ) {
-    serviceCalendarRegion?.let { region ->
-      localCalendarContextEngine.resolveRange(
-        CalendarContextRangeRequest(
-          startDate = experienceLocalDate,
-          endDateInclusive = experienceLocalDate.plusDays(
-            ServiceSelectionRequest.DEFAULT_LOOK_AHEAD_DAYS.toLong(),
-          ),
-          calendarRegion = region,
-        ),
-      )
-    }
-  }
-  // An incomplete local-calendar range must not silently fall back to the
-  // development Saturday/weekday classifier in ServiceScheduleSelector.
-  val calendarOverrides = calendarContextRange
-    ?.takeIf { range -> range.unavailableDays.isEmpty() }
-    ?.serviceCatalogOverrides
-  val serviceOpinionProfileId = when (experienceState.calendarRegion) {
-    CalendarRegion.ISRAEL -> serviceCatalog?.opinionProfiles
-      ?.firstOrNull { profile -> profile.calendarRegion.name == CalendarRegion.ISRAEL.name }
-      ?.id
-    CalendarRegion.DIASPORA -> serviceCatalog?.opinionProfiles
-      ?.firstOrNull { profile -> profile.calendarRegion.name == CalendarRegion.DIASPORA.name }
-      ?.id
-    CalendarRegion.UNSPECIFIED -> null
-  }
-  val serviceSelection = remember(
-    serviceScheduleSelector,
-    serviceScheduleInstant,
-    storedManualPlaceContext?.timeZoneId,
-    serviceOpinionProfileId,
-    calendarOverrides,
-    calendarContextRange?.unavailableDays,
-  ) {
-    serviceScheduleSelector?.takeIf {
-      calendarContextRange == null || calendarOverrides != null
-    }?.select(
-      ServiceSelectionRequest(
-        now = serviceScheduleInstant,
-        zoneId = storedManualPlaceContext?.timeZoneId?.let(ZoneId::of),
-        opinionProfileId = serviceOpinionProfileId,
-        calendarOverrides = calendarOverrides.orEmpty(),
-      ),
-    )
-  }
-  LaunchedEffect(serviceSelection, selectedScheduledServiceId) {
-    val available = serviceSelection as? ServiceSelectionResult.Available
-    val upcoming = available?.agenda?.upcomingServices.orEmpty()
-    if (selectedScheduledServiceId == null || upcoming.none { it.id == selectedScheduledServiceId }) {
-      val defaultServiceId = upcoming.firstOrNull()?.id
-      selectedScheduledServiceIdOverride = defaultServiceId
-      launchUserDataMutation {
-        experienceStateRepository?.setSelectedServicePlan(defaultServiceId)
-      }
-    }
   }
   val journeySummary = contentCatalog?.let { catalog ->
     val practice = practiceProgress(catalog, experienceState)
@@ -600,6 +713,11 @@ fun AsehApp(
         "Choose Israel or diaspora",
         "The calendar region is required before service composition can be treated as current.",
         NowJourneyAction.BUILD,
+      )
+      !selectedServiceSupportsRehearsal -> Triple(
+        "Choose the Shabbat morning rehearsal",
+        "The selected service has schedule metadata, but the installed conductor supports only the dated Shabbat morning rehearsal.",
+        NowJourneyAction.PRAYER,
       )
       missingRole != null -> Triple(
         "Assign ${missingRole.label.lowercase()}",
@@ -711,6 +829,7 @@ fun AsehApp(
       if (globalSearchOpen) {
         GlobalSearchDialog(
           catalog = contentCatalog,
+          workspaceSnapshot = workspaceSnapshot,
           onOpenEntry = { entry ->
             globalSearchOpen = false
             when (entry.destination) {
@@ -723,6 +842,28 @@ fun AsehApp(
                 requestedStudySourceId = entry.id
                 navigateTo(AsehDestination.STUDY)
               }
+              GlobalSearchDestination.BUILD -> {
+                val workspaceKind = checkNotNull(entry.workspaceKind) {
+                  "A workspace search result requires a workspace kind"
+                }
+                val address = checkNotNull(entry.workspaceRecordAddress) {
+                  "A workspace search result requires an exact record address"
+                }
+                requestedWorkspaceId = address.workspaceId.value
+                requestedWorkspaceRecordId = address.recordId?.value
+                requestedWorkspaceParentRecordId = address.parentRecordId?.value
+                requestedWorkspaceRecordKind = address.kind.name
+                activeWorkspaceIdOverride = address.workspaceId.value
+                serviceSetupSelected = false
+                workspaceRejectedIssues = emptyList()
+                launchUserDataMutation {
+                  experienceStateRepository?.setWorkspace(
+                    experienceState.workspaceName,
+                    workspaceKind,
+                  )
+                }
+                navigateTo(AsehDestination.BUILD)
+              }
             }
           },
           onDismiss = { globalSearchOpen = false },
@@ -732,6 +873,7 @@ fun AsehApp(
         ContextChooserDialog(
           selected = experienceState.workspaceKind,
           onSelected = { kind ->
+            activeWorkspaceIdOverride = null
             serviceSetupSelected = false
             workspaceRejectedIssues = emptyList()
             launchUserDataMutation {
@@ -833,6 +975,7 @@ fun AsehApp(
                 serviceSelection = serviceSelection,
                 showFunctionalReviewNotice = contentCatalog != null,
                 onOpenService = { serviceId ->
+                  selectedServiceWriteKey.set(null)
                   selectedScheduledServiceIdOverride = serviceId
                   launchUserDataMutation {
                     experienceStateRepository?.setSelectedServicePlan(serviceId)
@@ -853,15 +996,21 @@ fun AsehApp(
               AsehDestination.PRACTICE -> PracticeScreen(
                 catalog = contentCatalog,
                 state = experienceState,
+                occurrenceProgressEnabled = selectedServiceOccurrenceReady,
+                occurrenceProgressActivating = selectedServiceOccurrenceActivating,
                 requestedCardId = requestedPracticeCardId,
                 onRequestedCardConsumed = { requestedPracticeCardId = null },
                 onStepCompleted = { id, completed ->
-                  launchUserDataMutation {
-                    experienceStateRepository?.setPracticeStepCompleted(
-                      experienceServiceDate,
-                      id,
-                      completed,
-                    )
+                  dispatchServiceOccurrenceWrite(selectedServiceWriteKey.get()) { serviceInstance ->
+                    launchUserDataMutation {
+                      if (selectedServiceWriteKey.get() == serviceInstance) {
+                        experienceStateRepository?.setPracticeStepCompleted(
+                          serviceInstance,
+                          id,
+                          completed,
+                        )
+                      }
+                    }
                   }
                 },
                 onCardSaved = { id, saved ->
@@ -883,7 +1032,11 @@ fun AsehApp(
                 assemblyContext = experienceAssemblyContext,
                 serviceSelection = serviceSelection,
                 selectedScheduledServiceId = selectedScheduledServiceId,
+                selectedScheduledService = selectedScheduledService,
+                selectedServiceContentSupported = selectedServiceSupportsRehearsal,
+                serviceOccurrenceReady = selectedServiceOccurrenceReady,
                 onScheduledServiceSelected = { serviceId ->
+                  selectedServiceWriteKey.set(null)
                   selectedScheduledServiceIdOverride = serviceId
                   launchUserDataMutation {
                     experienceStateRepository?.setSelectedServicePlan(serviceId)
@@ -895,21 +1048,29 @@ fun AsehApp(
                   }
                 },
                 onPreflightCompleted = { id, completed ->
-                  launchUserDataMutation {
-                    experienceStateRepository?.setPreflightStepCompleted(
-                      experienceServiceDate,
-                      id,
-                      completed,
-                    )
+                  dispatchServiceOccurrenceWrite(selectedServiceWriteKey.get()) { serviceInstance ->
+                    launchUserDataMutation {
+                      if (selectedServiceWriteKey.get() == serviceInstance) {
+                        experienceStateRepository?.setPreflightStepCompleted(
+                          serviceInstance,
+                          id,
+                          completed,
+                        )
+                      }
+                    }
                   }
                 },
                 onSegmentCompleted = { id, completed ->
-                  launchUserDataMutation {
-                    experienceStateRepository?.setServiceSegmentCompleted(
-                      experienceServiceDate,
-                      id,
-                      completed,
-                    )
+                  dispatchServiceOccurrenceWrite(selectedServiceWriteKey.get()) { serviceInstance ->
+                    launchUserDataMutation {
+                      if (selectedServiceWriteKey.get() == serviceInstance) {
+                        experienceStateRepository?.setServiceSegmentCompleted(
+                          serviceInstance,
+                          id,
+                          completed,
+                        )
+                      }
+                    }
                   }
                 },
                 onOpenSource = { sourceId ->
@@ -953,7 +1114,10 @@ fun AsehApp(
                     serviceSetupSelected = serviceSetupSelected,
                     fixtureNotice = requireNotNull(workspaceRepository).fixtureNotice,
                     onOpenWorkspace = { serviceSetupSelected = false },
-                    onOpenServiceSetup = { serviceSetupSelected = true },
+                    onOpenServiceSetup = {
+                      workspaceEditorOpen = false
+                      serviceSetupSelected = true
+                    },
                   )
                 }
                 if (workspaceDashboardAvailable && !serviceSetupSelected) {
@@ -962,6 +1126,8 @@ fun AsehApp(
                     activeContext = requireNotNull(workspaceContext),
                     asOf = experienceLocalDate,
                     onCommand = { command ->
+                      workspacePersistenceFailed = false
+                      workspaceRejectedIssues = emptyList()
                       locationScope.launch {
                         var updateResult: WorkspaceUpdateResult? = null
                         try {
@@ -994,35 +1160,89 @@ fun AsehApp(
                       rejectedCommandIssues = workspaceRejectedIssues,
                       persistenceFailed = workspacePersistenceFailed,
                     ),
+                    requestedRecord = requestedWorkspaceRecordKind?.let { kindName ->
+                      val workspaceId = requestedWorkspaceId ?: return@let null
+                      runCatching {
+                        WorkspaceRecordAddress(
+                          workspaceId = WorkspaceId(workspaceId),
+                          kind = WorkspaceRecordKind.valueOf(kindName),
+                          recordId = requestedWorkspaceRecordId?.let(::WorkspaceRecordId),
+                          parentRecordId = requestedWorkspaceParentRecordId?.let(::WorkspaceRecordId),
+                        )
+                      }.getOrNull()
+                    },
+                    onRequestedRecordConsumed = {
+                      requestedWorkspaceId = null
+                      requestedWorkspaceRecordId = null
+                      requestedWorkspaceParentRecordId = null
+                      requestedWorkspaceRecordKind = null
+                    },
+                    dismissEditorRequest = dismissWorkspaceEditorRequest,
+                    onEditorOpenChanged = { workspaceEditorOpen = it },
                   )
                 } else {
                   BuildScreen(
                 catalog = contentCatalog,
+                serviceOccurrenceSupported = selectedServiceOccurrenceReady,
+                serviceOccurrenceActivating = selectedServiceOccurrenceActivating,
                 state = experienceState,
                 dateLabel = experienceDateLabel,
                 locationLabel = experienceLocationLabel,
                 assemblyContext = experienceAssemblyContext,
                 onWorkspaceSaved = { name, kind ->
                   launchUserDataMutation {
-                    experienceStateRepository?.setWorkspace(name, kind)
+                    val renameCommand = when (kind) {
+                      WorkspaceKind.SELF -> workspaceSnapshot.selfWorkspaces.firstOrNull()?.let {
+                        io.github.gilnetizen.aseh.domain.workspace.WorkspaceCommand.RenameSelf(it.id, name)
+                      }
+                      WorkspaceKind.HOUSEHOLD -> workspaceSnapshot.households.firstOrNull()?.let {
+                        io.github.gilnetizen.aseh.domain.workspace.WorkspaceCommand.RenameHousehold(it.id, name)
+                      }
+                      WorkspaceKind.QAHAL -> workspaceSnapshot.qahalWorkspaces.firstOrNull()?.let {
+                        io.github.gilnetizen.aseh.domain.workspace.WorkspaceCommand.RenameQahal(it.id, name)
+                      }
+                    }
+                    val renameResult = if (renameCommand != null && workspaceReviewStateRepository != null) {
+                      workspaceReviewStateRepository.apply(renameCommand)
+                    } else {
+                      null
+                    }
+                    val rejectedIssues = (renameResult as? WorkspaceUpdateResult.Rejected)?.issues.orEmpty()
+                    workspacePersistenceFailed = rejectedIssues.any { issue ->
+                      issue.path == WORKSPACE_LOCAL_PERSISTENCE_PATH
+                    }
+                    workspaceRejectedIssues = rejectedIssues.filterNot { issue ->
+                      issue.path == WORKSPACE_LOCAL_PERSISTENCE_PATH
+                    }
+                    if (renameResult !is WorkspaceUpdateResult.Rejected) {
+                      experienceStateRepository?.setWorkspace(name, kind)
+                    }
                   }
                 },
                 onRoleAssignmentChanged = { role, name ->
-                  launchUserDataMutation {
-                    experienceStateRepository?.setRoleAssignment(
-                      experienceServiceDate,
-                      role,
-                      name,
-                    )
+                  dispatchServiceOccurrenceWrite(selectedServiceWriteKey.get()) { serviceInstance ->
+                    launchUserDataMutation {
+                      if (selectedServiceWriteKey.get() == serviceInstance) {
+                        experienceStateRepository?.setRoleAssignment(
+                          serviceInstance,
+                          role,
+                          name,
+                        )
+                      }
+                    }
                   }
                 },
                 onReadingPlanChanged = { slotId, plan ->
-                  launchUserDataMutation {
-                    experienceStateRepository?.setReadingPlan(
-                      experienceServiceDate,
-                      slotId,
-                      plan,
-                    )
+                  dispatchServiceOccurrenceWrite(selectedServiceWriteKey.get()) { serviceInstance ->
+                    launchUserDataMutation {
+                      if (selectedServiceWriteKey.get() == serviceInstance) {
+                        experienceStateRepository?.setReadingPlan(
+                          serviceInstance,
+                          slotId,
+                          plan,
+                        )
+                      }
+                    }
                   }
                 },
                 onDeviceUseModeChanged = { mode ->
@@ -1094,6 +1314,7 @@ fun AsehApp(
                           }
                         if (result.isComplete && !workspaceDeletionFailed) {
                           selectedDestinationOverride = null
+                          selectedServiceWriteKey.set(null)
                           selectedScheduledServiceIdOverride = null
                           globalSearchOpen = false
                           contextChooserOpen = false
@@ -1117,6 +1338,64 @@ fun AsehApp(
     }
   }
 }
+
+internal const val SHABBAT_MORNING_REHEARSAL_SERVICE_ID = "dev.service.shabbat.morning"
+
+private val serviceOccurrenceDateFormatter: DateTimeFormatter =
+  DateTimeFormatter.ofPattern("EEEE, MMMM d", Locale.ENGLISH)
+
+internal fun selectScheduledService(
+  selection: ServiceSelectionResult?,
+  requestedServiceId: String?,
+): DatedServiceInstance? {
+  val upcoming = (selection as? ServiceSelectionResult.Available)
+    ?.agenda
+    ?.upcomingServices
+    .orEmpty()
+  return upcoming.firstOrNull { service -> service.id == requestedServiceId }
+    ?: upcoming.firstOrNull(DatedServiceInstance::supportsShabbatMorningRehearsal)
+    ?: upcoming.firstOrNull()
+}
+
+internal fun DatedServiceInstance.supportsShabbatMorningRehearsal(): Boolean =
+    definition.id == SHABBAT_MORNING_REHEARSAL_SERVICE_ID &&
+    definition.serviceKind == ServiceKind.MORNING &&
+    calendarDay.dayKind == ScheduledServiceDayKind.SHABBAT &&
+    ServiceOperationalCapability.SHABBAT_MORNING_REHEARSAL in
+      definition.operationalCapabilities &&
+    temporalState != ServiceTemporalState.PASSED
+
+internal fun DatedServiceInstance.rehearsalServiceInstanceKeyOrNull(): ServiceInstanceKey? =
+  takeIf(DatedServiceInstance::supportsShabbatMorningRehearsal)?.let { service ->
+    ServiceInstanceKey(
+      occurrenceId = service.id,
+      serviceDate = service.serviceDate,
+    )
+  }
+
+internal fun dispatchServiceOccurrenceWrite(
+  serviceInstance: ServiceInstanceKey?,
+  write: (ServiceInstanceKey) -> Unit,
+): Boolean {
+  val supportedInstance = serviceInstance ?: return false
+  write(supportedInstance)
+  return true
+}
+
+internal fun writableServiceInstanceKey(
+  selected: ServiceInstanceKey?,
+  persistedActive: ServiceInstanceKey?,
+): ServiceInstanceKey? = selected?.takeIf { it == persistedActive }
+
+internal fun DatedServiceInstance.serviceDisplayLabel(): String =
+  "${definition.title.fallbackEnglish} · " + startsAt.format(serviceOccurrenceDateFormatter)
+
+internal fun DatedServiceInstance.toCoreServiceDayKind(): ServiceDayKind =
+  when (calendarDay.dayKind) {
+    ScheduledServiceDayKind.WEEKDAY -> ServiceDayKind.WEEKDAY
+    ScheduledServiceDayKind.SHABBAT -> ServiceDayKind.SHABBAT
+    ScheduledServiceDayKind.FESTIVAL -> ServiceDayKind.FESTIVAL
+  }
 
 internal data class ServiceCalendarContext(
   val hebrewDate: ServiceHebrewDateContext,

@@ -14,6 +14,121 @@ sealed interface WorkspaceCommand {
 
     data class PutQahal(val qahal: QahalWorkspace) : WorkspaceCommand
 
+    data class RenameSelf(val selfId: WorkspaceId, val label: String) : WorkspaceCommand
+
+    data class RenameHousehold(val householdId: WorkspaceId, val label: String) : WorkspaceCommand
+
+    data class RenameQahal(val qahalId: WorkspaceId, val label: String) : WorkspaceCommand
+
+    data class PutHouseholdResponsibility(
+        val householdId: WorkspaceId,
+        val responsibility: HouseholdResponsibility,
+    ) : WorkspaceCommand
+
+    data class DeleteHouseholdResponsibility(
+        val householdId: WorkspaceId,
+        val id: WorkspaceRecordId,
+    ) : WorkspaceCommand
+
+    data class PutHouseholdCalendarItem(
+        val householdId: WorkspaceId,
+        val item: HouseholdCalendarItem,
+    ) : WorkspaceCommand
+
+    data class DeleteHouseholdCalendarItem(
+        val householdId: WorkspaceId,
+        val id: WorkspaceRecordId,
+    ) : WorkspaceCommand
+
+    data class PutHouseholdPreparationKit(
+        val householdId: WorkspaceId,
+        val kit: HouseholdPreparationKit,
+    ) : WorkspaceCommand
+
+    data class DeleteHouseholdPreparationKit(
+        val householdId: WorkspaceId,
+        val id: WorkspaceRecordId,
+    ) : WorkspaceCommand
+
+    data class PutPreparationKitTask(
+        val householdId: WorkspaceId,
+        val kitId: WorkspaceRecordId,
+        val task: PreparationKitTask,
+    ) : WorkspaceCommand
+
+    data class DeletePreparationKitTask(
+        val householdId: WorkspaceId,
+        val kitId: WorkspaceRecordId,
+        val id: WorkspaceRecordId,
+    ) : WorkspaceCommand
+
+    data class PutQahalDecision(
+        val qahalId: WorkspaceId,
+        val decision: QahalDecision,
+    ) : WorkspaceCommand
+
+    data class DeleteQahalDecision(
+        val qahalId: WorkspaceId,
+        val id: WorkspaceRecordId,
+    ) : WorkspaceCommand
+
+    data class PutInventoryItem(
+        val qahalId: WorkspaceId,
+        val item: InventoryItem,
+    ) : WorkspaceCommand
+
+    data class DeleteInventoryItem(
+        val qahalId: WorkspaceId,
+        val id: WorkspaceRecordId,
+    ) : WorkspaceCommand
+
+    data class PutVolunteerRotation(
+        val qahalId: WorkspaceId,
+        val rotation: VolunteerRotation,
+    ) : WorkspaceCommand
+
+    data class DeleteVolunteerRotation(
+        val qahalId: WorkspaceId,
+        val id: WorkspaceRecordId,
+    ) : WorkspaceCommand
+
+    data class PutVolunteerSlot(
+        val qahalId: WorkspaceId,
+        val rotationId: WorkspaceRecordId,
+        val slot: VolunteerSlot,
+        val expectedStatus: VolunteerSlotStatus = slot.status,
+        val expectedStatusChangedOn: LocalDate = slot.statusChangedOn,
+        val expectedAssignedTo: LocalPersonId? = slot.assignedTo,
+    ) : WorkspaceCommand
+
+    data class DeleteVolunteerSlot(
+        val qahalId: WorkspaceId,
+        val rotationId: WorkspaceRecordId,
+        val id: WorkspaceRecordId,
+    ) : WorkspaceCommand
+
+    data class PutFinancialChecklist(
+        val qahalId: WorkspaceId,
+        val checklist: FinancialControlChecklist,
+    ) : WorkspaceCommand
+
+    data class DeleteFinancialChecklist(
+        val qahalId: WorkspaceId,
+        val id: WorkspaceRecordId,
+    ) : WorkspaceCommand
+
+    data class PutFinancialControl(
+        val qahalId: WorkspaceId,
+        val checklistId: WorkspaceRecordId,
+        val control: FinancialControlItem,
+    ) : WorkspaceCommand
+
+    data class DeleteFinancialControl(
+        val qahalId: WorkspaceId,
+        val checklistId: WorkspaceRecordId,
+        val id: WorkspaceRecordId,
+    ) : WorkspaceCommand
+
     data class ChangePracticeStatus(
         val selfId: WorkspaceId,
         val id: WorkspaceRecordId,
@@ -139,6 +254,208 @@ object LocalWorkspaceApi {
             is WorkspaceCommand.PutQahal -> WorkspaceOperationResult.Success(
                 snapshot.copy(qahalWorkspaces = snapshot.qahalWorkspaces.replaceOrAppend(command.qahal) { it.id }),
             )
+            is WorkspaceCommand.RenameSelf -> updateSelf(snapshot, command.selfId) { self ->
+                WorkspaceOperationResult.Success(self.copy(label = command.label.trim()))
+            }
+            is WorkspaceCommand.RenameHousehold -> updateHousehold(snapshot, command.householdId) { household ->
+                WorkspaceOperationResult.Success(household.copy(label = command.label.trim()))
+            }
+            is WorkspaceCommand.RenameQahal -> updateQahal(snapshot, command.qahalId) { qahal ->
+                WorkspaceOperationResult.Success(qahal.copy(label = command.label.trim()))
+            }
+            is WorkspaceCommand.PutHouseholdResponsibility -> updateHousehold(snapshot, command.householdId) { household ->
+                val current = household.responsibilities.firstOrNull { it.id == command.responsibility.id }
+                val merged = current?.let {
+                    command.responsibility.copy(status = it.status, statusChangedOn = it.statusChangedOn)
+                } ?: command.responsibility
+                WorkspaceOperationResult.Success(
+                    household.copy(
+                        responsibilities = household.responsibilities.replaceOrAppend(merged) { it.id },
+                    ),
+                )
+            }
+            is WorkspaceCommand.DeleteHouseholdResponsibility -> updateHousehold(snapshot, command.householdId) { household ->
+                household.responsibilities
+                    .removeFirst("household.responsibilities") { it.id == command.id }
+                    .map { household.copy(responsibilities = it) }
+            }
+            is WorkspaceCommand.PutHouseholdCalendarItem -> updateHousehold(snapshot, command.householdId) { household ->
+                val current = household.calendarItems.firstOrNull { it.id == command.item.id }
+                val merged = current?.let {
+                    command.item.copy(status = it.status, statusChangedOn = it.statusChangedOn)
+                } ?: command.item
+                WorkspaceOperationResult.Success(
+                    household.copy(calendarItems = household.calendarItems.replaceOrAppend(merged) { it.id }),
+                )
+            }
+            is WorkspaceCommand.DeleteHouseholdCalendarItem -> updateHousehold(snapshot, command.householdId) { household ->
+                household.calendarItems
+                    .removeFirst("household.calendarItems") { it.id == command.id }
+                    .map { household.copy(calendarItems = it) }
+            }
+            is WorkspaceCommand.PutHouseholdPreparationKit -> updateHousehold(snapshot, command.householdId) { household ->
+                val current = household.preparationKits.firstOrNull { it.id == command.kit.id }
+                val merged = current?.let {
+                    command.kit.copy(
+                        status = it.status,
+                        statusChangedOn = it.statusChangedOn,
+                        tasks = it.tasks,
+                    )
+                } ?: command.kit
+                WorkspaceOperationResult.Success(
+                    household.copy(preparationKits = household.preparationKits.replaceOrAppend(merged) { it.id }),
+                )
+            }
+            is WorkspaceCommand.DeleteHouseholdPreparationKit -> updateHousehold(snapshot, command.householdId) { household ->
+                household.preparationKits
+                    .removeFirst("household.preparationKits") { it.id == command.id }
+                    .map { household.copy(preparationKits = it) }
+            }
+            is WorkspaceCommand.PutPreparationKitTask -> updateHousehold(snapshot, command.householdId) { household ->
+                household.preparationKits
+                    .updateFirst("household.preparationKits", { it.id == command.kitId }) { kit ->
+                        val current = kit.tasks.firstOrNull { it.id == command.task.id }
+                        val merged = current?.let {
+                            command.task.copy(status = it.status, statusChangedOn = it.statusChangedOn)
+                        } ?: command.task
+                        WorkspaceOperationResult.Success(
+                            kit.copy(tasks = kit.tasks.replaceOrAppend(merged) { it.id }),
+                        )
+                    }.map { household.copy(preparationKits = it) }
+            }
+            is WorkspaceCommand.DeletePreparationKitTask -> updateHousehold(snapshot, command.householdId) { household ->
+                household.preparationKits
+                    .updateFirst("household.preparationKits", { it.id == command.kitId }) { kit ->
+                        kit.tasks
+                            .removeFirst("household.preparationKits.tasks") { it.id == command.id }
+                            .map { kit.copy(tasks = it) }
+                    }.map { household.copy(preparationKits = it) }
+            }
+            is WorkspaceCommand.PutQahalDecision -> updateQahal(snapshot, command.qahalId) { qahal ->
+                val current = qahal.decisions.firstOrNull { it.id == command.decision.id }
+                val merged = current?.let {
+                    command.decision.copy(
+                        status = it.status,
+                        effectiveOn = if (it.status == command.decision.status) command.decision.effectiveOn else it.effectiveOn,
+                        reviewOn = if (it.status == command.decision.status) command.decision.reviewOn else it.reviewOn,
+                        statusChangedOn = it.statusChangedOn,
+                        sourceReferences = it.sourceReferences,
+                        dissentSummary = it.dissentSummary,
+                    )
+                } ?: command.decision
+                WorkspaceOperationResult.Success(
+                    qahal.copy(decisions = qahal.decisions.replaceOrAppend(merged) { it.id }),
+                )
+            }
+            is WorkspaceCommand.DeleteQahalDecision -> updateQahal(snapshot, command.qahalId) { qahal ->
+                qahal.decisions
+                    .removeFirst("qahal.decisions") { it.id == command.id }
+                    .map { qahal.copy(decisions = it) }
+            }
+            is WorkspaceCommand.PutInventoryItem -> updateQahal(snapshot, command.qahalId) { qahal ->
+                val current = qahal.inventory.firstOrNull { it.id == command.item.id }
+                val merged = current?.let {
+                    command.item.copy(status = it.status, statusChangedOn = it.statusChangedOn)
+                } ?: command.item
+                WorkspaceOperationResult.Success(
+                    qahal.copy(inventory = qahal.inventory.replaceOrAppend(merged) { it.id }),
+                )
+            }
+            is WorkspaceCommand.DeleteInventoryItem -> updateQahal(snapshot, command.qahalId) { qahal ->
+                qahal.inventory
+                    .removeFirst("qahal.inventory") { it.id == command.id }
+                    .map { qahal.copy(inventory = it) }
+            }
+            is WorkspaceCommand.PutVolunteerRotation -> updateQahal(snapshot, command.qahalId) { qahal ->
+                val current = qahal.volunteerRotations.firstOrNull { it.id == command.rotation.id }
+                val merged = current?.let {
+                    command.rotation.copy(
+                        status = it.status,
+                        statusChangedOn = it.statusChangedOn,
+                        slots = it.slots,
+                    )
+                } ?: command.rotation
+                WorkspaceOperationResult.Success(
+                    qahal.copy(
+                        volunteerRotations = qahal.volunteerRotations.replaceOrAppend(merged) { it.id },
+                    ),
+                )
+            }
+            is WorkspaceCommand.DeleteVolunteerRotation -> updateQahal(snapshot, command.qahalId) { qahal ->
+                qahal.volunteerRotations
+                    .removeFirst("qahal.volunteerRotations") { it.id == command.id }
+                    .map { qahal.copy(volunteerRotations = it) }
+            }
+            is WorkspaceCommand.PutVolunteerSlot -> updateQahal(snapshot, command.qahalId) { qahal ->
+                qahal.volunteerRotations
+                    .updateFirst("qahal.volunteerRotations", { it.id == command.rotationId }) { rotation ->
+                        val current = rotation.slots.firstOrNull { it.id == command.slot.id }
+                        val merged = current?.let {
+                            val lifecycleChangedSinceEditorOpened =
+                                it.status != command.expectedStatus ||
+                                    it.statusChangedOn != command.expectedStatusChangedOn ||
+                                    it.assignedTo != command.expectedAssignedTo
+                            if (lifecycleChangedSinceEditorOpened) {
+                                command.slot.copy(
+                                    assignedTo = it.assignedTo,
+                                    status = it.status,
+                                    statusChangedOn = it.statusChangedOn,
+                                )
+                            } else {
+                                command.slot
+                            }
+                        } ?: command.slot
+                        WorkspaceOperationResult.Success(
+                            rotation.copy(slots = rotation.slots.replaceOrAppend(merged) { it.id }),
+                        )
+                    }.map { qahal.copy(volunteerRotations = it) }
+            }
+            is WorkspaceCommand.DeleteVolunteerSlot -> updateQahal(snapshot, command.qahalId) { qahal ->
+                qahal.volunteerRotations
+                    .updateFirst("qahal.volunteerRotations", { it.id == command.rotationId }) { rotation ->
+                        rotation.slots
+                            .removeFirst("qahal.volunteerRotations.slots") { it.id == command.id }
+                            .map { rotation.copy(slots = it) }
+                    }.map { qahal.copy(volunteerRotations = it) }
+            }
+            is WorkspaceCommand.PutFinancialChecklist -> updateQahal(snapshot, command.qahalId) { qahal ->
+                val current = qahal.financialControls.firstOrNull { it.id == command.checklist.id }
+                val merged = current?.let {
+                    command.checklist.copy(
+                        status = it.status,
+                        statusChangedOn = it.statusChangedOn,
+                        controls = it.controls,
+                    )
+                } ?: command.checklist
+                WorkspaceOperationResult.Success(
+                    qahal.copy(financialControls = qahal.financialControls.replaceOrAppend(merged) { it.id }),
+                )
+            }
+            is WorkspaceCommand.DeleteFinancialChecklist -> updateQahal(snapshot, command.qahalId) { qahal ->
+                qahal.financialControls
+                    .removeFirst("qahal.financialControls") { it.id == command.id }
+                    .map { qahal.copy(financialControls = it) }
+            }
+            is WorkspaceCommand.PutFinancialControl -> updateQahal(snapshot, command.qahalId) { qahal ->
+                qahal.financialControls
+                    .updateFirst("qahal.financialControls", { it.id == command.checklistId }) { checklist ->
+                        val current = checklist.controls.firstOrNull { it.id == command.control.id }
+                        val merged = current?.let {
+                            command.control.copy(status = it.status, statusChangedOn = it.statusChangedOn)
+                        } ?: command.control
+                        WorkspaceOperationResult.Success(
+                            checklist.copy(controls = checklist.controls.replaceOrAppend(merged) { it.id }),
+                        )
+                    }.map { qahal.copy(financialControls = it) }
+            }
+            is WorkspaceCommand.DeleteFinancialControl -> updateQahal(snapshot, command.qahalId) { qahal ->
+                qahal.financialControls
+                    .updateFirst("qahal.financialControls", { it.id == command.checklistId }) { checklist ->
+                        checklist.controls
+                            .removeFirst("qahal.financialControls.controls") { it.id == command.id }
+                            .map { checklist.copy(controls = it) }
+                    }.map { qahal.copy(financialControls = it) }
+            }
             is WorkspaceCommand.ChangePracticeStatus -> updateSelf(snapshot, command.selfId) { self ->
                 self.practiceAdoptions
                     .updateFirst("self.practiceAdoptions", { it.id == command.id }) { adoption ->
@@ -301,6 +618,25 @@ object LocalWorkspaceApi {
         val index = indexOfFirst { existing -> id(existing) == id(item) }
         if (index < 0) return this + item
         return toMutableList().also { it[index] = item }.toList()
+    }
+
+    private inline fun <T> List<T>.removeFirst(
+        path: String,
+        predicate: (T) -> Boolean,
+    ): WorkspaceOperationResult<List<T>> {
+        val index = indexOfFirst(predicate)
+        if (index < 0) {
+            return WorkspaceOperationResult.Rejected(
+                listOf(
+                    WorkspaceIssue(
+                        WorkspaceIssueCode.RECORD_NOT_FOUND,
+                        path,
+                        "The requested local record was not found.",
+                    ),
+                ),
+            )
+        }
+        return WorkspaceOperationResult.Success(toMutableList().also { it.removeAt(index) }.toList())
     }
 
     private inline fun <A, B> WorkspaceOperationResult<A>.map(

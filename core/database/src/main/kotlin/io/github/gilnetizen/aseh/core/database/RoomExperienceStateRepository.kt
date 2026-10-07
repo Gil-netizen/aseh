@@ -12,6 +12,7 @@ import io.github.gilnetizen.aseh.core.model.ParticipantRole
 import io.github.gilnetizen.aseh.core.model.ReadingPlanEntry
 import io.github.gilnetizen.aseh.core.model.ReadingPreparationStatus
 import io.github.gilnetizen.aseh.core.model.ServiceAccessibilityProfile
+import io.github.gilnetizen.aseh.core.model.ServiceInstanceKey
 import io.github.gilnetizen.aseh.core.model.WorkspaceKind
 import java.time.LocalDate
 import kotlinx.coroutines.flow.Flow
@@ -52,8 +53,15 @@ internal class RoomExperienceStateRepository(
         )
     }
 
-    override suspend fun activateServiceInstance(serviceDate: LocalDate) = withInitialized {
-        dao.activateServiceInstance(serviceDate.toString())
+    override suspend fun activateServiceInstance(serviceInstance: ServiceInstanceKey) = withInitialized {
+        dao.activateServiceInstance(
+            serviceInstance.occurrenceId,
+            serviceInstance.serviceDate.toString(),
+        )
+    }
+
+    override suspend fun deactivateServiceInstance() = withInitialized {
+        dao.deactivateServiceInstance()
     }
 
     override suspend fun setPracticeStepCompleted(stepId: String, completed: Boolean) {
@@ -61,11 +69,16 @@ internal class RoomExperienceStateRepository(
     }
 
     override suspend fun setPracticeStepCompleted(
-        serviceDate: LocalDate,
+        serviceInstance: ServiceInstanceKey,
         stepId: String,
         completed: Boolean,
     ) {
-        setServiceMarker(serviceDate, ExperienceRecordTypes.COMPLETED_PRACTICE_STEP, stepId, completed)
+        setServiceMarker(
+            serviceInstance,
+            ExperienceRecordTypes.COMPLETED_PRACTICE_STEP,
+            stepId,
+            completed,
+        )
     }
 
     override suspend fun setPracticeCardSaved(cardId: String, saved: Boolean) {
@@ -77,11 +90,16 @@ internal class RoomExperienceStateRepository(
     }
 
     override suspend fun setPreflightStepCompleted(
-        serviceDate: LocalDate,
+        serviceInstance: ServiceInstanceKey,
         stepId: String,
         completed: Boolean,
     ) {
-        setServiceMarker(serviceDate, ExperienceRecordTypes.COMPLETED_PREFLIGHT_STEP, stepId, completed)
+        setServiceMarker(
+            serviceInstance,
+            ExperienceRecordTypes.COMPLETED_PREFLIGHT_STEP,
+            stepId,
+            completed,
+        )
     }
 
     override suspend fun setServiceSegmentCompleted(segmentId: String, completed: Boolean) {
@@ -89,12 +107,12 @@ internal class RoomExperienceStateRepository(
     }
 
     override suspend fun setServiceSegmentCompleted(
-        serviceDate: LocalDate,
+        serviceInstance: ServiceInstanceKey,
         segmentId: String,
         completed: Boolean,
     ) {
         setServiceMarker(
-            serviceDate,
+            serviceInstance,
             ExperienceRecordTypes.COMPLETED_SERVICE_SEGMENT,
             segmentId,
             completed,
@@ -137,48 +155,48 @@ internal class RoomExperienceStateRepository(
     }
 
     override suspend fun setRoleAssignment(role: ParticipantRole, name: String) = withInitialized {
-        requireActiveServiceInstance()
-        persistRoleAssignment(role, name)
+        val serviceInstance = requireActiveServiceInstance()
+        persistRoleAssignment(serviceInstance, role, name)
     }
 
     override suspend fun setRoleAssignment(
-        serviceDate: LocalDate,
+        serviceInstance: ServiceInstanceKey,
         role: ParticipantRole,
         name: String,
-    ) = withServiceInstanceForWrite(serviceDate) {
-        persistRoleAssignment(role, name)
+    ) = withServiceInstanceForWrite(serviceInstance) {
+        persistRoleAssignment(serviceInstance, role, name)
     }
 
     override suspend fun setReadingAssignment(slotId: String, name: String) = withInitialized {
-        requireActiveServiceInstance()
+        val serviceInstance = requireActiveServiceInstance()
         require(slotId.isNotBlank()) { "Reading slot IDs must not be blank" }
         val normalized = name.normalizedExperienceLabel()
-        dao.setReadingAssignmentAndPlan(slotId, normalized)
+        dao.setReadingAssignmentAndPlan(serviceInstance.occurrenceId, slotId, normalized)
     }
 
     override suspend fun setReadingAssignment(
-        serviceDate: LocalDate,
+        serviceInstance: ServiceInstanceKey,
         slotId: String,
         name: String,
-    ) = withServiceInstanceForWrite(serviceDate) {
+    ) = withServiceInstanceForWrite(serviceInstance) {
         require(slotId.isNotBlank()) { "Reading slot IDs must not be blank" }
         val normalized = name.normalizedExperienceLabel()
-        dao.setReadingAssignmentAndPlan(slotId, normalized)
+        dao.setReadingAssignmentAndPlan(serviceInstance.occurrenceId, slotId, normalized)
     }
 
     override suspend fun setReadingPlan(slotId: String, plan: ReadingPlanEntry) = withInitialized {
-        requireActiveServiceInstance()
+        val serviceInstance = requireActiveServiceInstance()
         require(slotId.isNotBlank()) { "Reading slot IDs must not be blank" }
-        persistReadingPlan(slotId, plan)
+        persistReadingPlan(serviceInstance, slotId, plan)
     }
 
     override suspend fun setReadingPlan(
-        serviceDate: LocalDate,
+        serviceInstance: ServiceInstanceKey,
         slotId: String,
         plan: ReadingPlanEntry,
-    ) = withServiceInstanceForWrite(serviceDate) {
+    ) = withServiceInstanceForWrite(serviceInstance) {
         require(slotId.isNotBlank()) { "Reading slot IDs must not be blank" }
-        persistReadingPlan(slotId, plan)
+        persistReadingPlan(serviceInstance, slotId, plan)
     }
 
     override suspend fun setDeviceUseMode(mode: DeviceUseMode) {
@@ -262,7 +280,11 @@ internal class RoomExperienceStateRepository(
     }
 
     override suspend fun resetRehearsalProgress() = withInitialized {
-        dao.deleteRecordMarkers(ExperienceRecordTypes.rehearsalProgress)
+        val serviceInstance = requireActiveServiceInstance()
+        dao.deleteServiceRecordMarkers(
+            serviceInstance.occurrenceId,
+            ExperienceRecordTypes.rehearsalProgress,
+        )
     }
 
     override suspend fun clearAllExperienceData() {
@@ -272,13 +294,18 @@ internal class RoomExperienceStateRepository(
         }
     }
 
-    private suspend fun persistRoleAssignment(role: ParticipantRole, name: String) {
+    private suspend fun persistRoleAssignment(
+        serviceInstance: ServiceInstanceKey,
+        role: ParticipantRole,
+        name: String,
+    ) {
         val normalized = name.normalizedExperienceLabel()
         if (normalized.isBlank()) {
-            dao.deleteRoleAssignment(role.id)
+            dao.deleteRoleAssignment(serviceInstance.occurrenceId, role.id)
         } else {
             dao.upsertRoleAssignment(
                 ExperienceRoleAssignmentEntity(
+                    serviceInstanceId = serviceInstance.occurrenceId,
                     roleId = role.id,
                     assigneeName = normalized,
                 ),
@@ -286,13 +313,27 @@ internal class RoomExperienceStateRepository(
         }
     }
 
-    private suspend fun persistReadingPlan(slotId: String, plan: ReadingPlanEntry) {
+    private suspend fun persistReadingPlan(
+        serviceInstance: ServiceInstanceKey,
+        slotId: String,
+        plan: ReadingPlanEntry,
+    ) {
         val normalized = plan.normalizedForPersistence()
-        val planEntity = normalized.takeUnless { it == ReadingPlanEntry() }?.toEntity(slotId)
+        val planEntity = normalized.takeUnless { it == ReadingPlanEntry() }
+            ?.toEntity(serviceInstance.occurrenceId, slotId)
         val assignmentEntity = normalized.assignee.takeIf(String::isNotBlank)?.let { assignee ->
-            ExperienceReadingAssignmentEntity(slotId = slotId, assigneeName = assignee)
+            ExperienceReadingAssignmentEntity(
+                serviceInstanceId = serviceInstance.occurrenceId,
+                slotId = slotId,
+                assigneeName = assignee,
+            )
         }
-        dao.setReadingPlanAndAssignment(slotId, planEntity, assignmentEntity)
+        dao.setReadingPlanAndAssignment(
+            serviceInstance.occurrenceId,
+            slotId,
+            planEntity,
+            assignmentEntity,
+        )
     }
 
     private suspend fun setActiveServiceMarker(
@@ -300,17 +341,17 @@ internal class RoomExperienceStateRepository(
         recordId: String,
         included: Boolean,
     ) = withInitialized {
-        requireActiveServiceInstance()
-        persistMarker(recordType, recordId, included)
+        val serviceInstance = requireActiveServiceInstance()
+        persistServiceMarker(serviceInstance, recordType, recordId, included)
     }
 
     private suspend fun setServiceMarker(
-        serviceDate: LocalDate,
+        serviceInstance: ServiceInstanceKey,
         recordType: String,
         recordId: String,
         included: Boolean,
-    ) = withServiceInstanceForWrite(serviceDate) {
-        persistMarker(recordType, recordId, included)
+    ) = withServiceInstanceForWrite(serviceInstance) {
+        persistServiceMarker(serviceInstance, recordType, recordId, included)
     }
 
     private suspend fun setMarker(recordType: String, recordId: String, included: Boolean) =
@@ -332,10 +373,35 @@ internal class RoomExperienceStateRepository(
         }
     }
 
-    private suspend fun requireActiveServiceInstance() {
-        check(currentProfile().serviceInstanceDate != null) {
-            "A dated service instance must be active before writing weekly state"
+    private suspend fun persistServiceMarker(
+        serviceInstance: ServiceInstanceKey,
+        recordType: String,
+        recordId: String,
+        included: Boolean,
+    ) {
+        require(recordId.isNotBlank()) { "Persistent record IDs must not be blank" }
+        if (included) {
+            dao.insertServiceRecordMarker(
+                ExperienceServiceRecordMarkerEntity(
+                    serviceInstanceId = serviceInstance.occurrenceId,
+                    recordType = recordType,
+                    recordId = recordId,
+                ),
+            )
+        } else {
+            dao.deleteServiceRecordMarker(serviceInstance.occurrenceId, recordType, recordId)
         }
+    }
+
+    private suspend fun requireActiveServiceInstance(): ServiceInstanceKey {
+        val current = currentProfile()
+        val id = checkNotNull(current.serviceInstanceId) {
+            "A service occurrence must be active before writing occurrence state"
+        }
+        val date = checkNotNull(current.serviceInstanceDate) {
+            "An active service occurrence must have a civil date"
+        }
+        return ServiceInstanceKey(id, LocalDate.parse(date))
     }
 
     private suspend fun currentProfile(): ExperienceProfileEntity =
@@ -352,12 +418,19 @@ internal class RoomExperienceStateRepository(
         }
 
     private suspend fun withServiceInstanceForWrite(
-        serviceDate: LocalDate,
+        serviceInstance: ServiceInstanceKey,
         block: suspend () -> Unit,
     ) {
         operationMutex.withLock {
             ensureInitializedLocked()
-            if (dao.prepareServiceInstanceForWrite(serviceDate.toString())) block()
+            if (
+                dao.prepareServiceInstanceForWrite(
+                    serviceInstance.occurrenceId,
+                    serviceInstance.serviceDate.toString(),
+                )
+            ) {
+                block()
+            }
         }
     }
 
@@ -380,6 +453,7 @@ internal class RoomExperienceStateRepository(
 
 private fun ExperienceState.withOperationalState(operational: ExperienceState): ExperienceState =
     copy(
+        serviceInstanceId = operational.serviceInstanceId,
         serviceInstanceDate = operational.serviceInstanceDate,
         completedPracticeStepIds = operational.completedPracticeStepIds,
         savedPracticeCardIds = operational.savedPracticeCardIds,
@@ -401,7 +475,7 @@ private fun ExperienceState.withOperationalState(operational: ExperienceState): 
 private const val MAX_SERVICE_PLAN_ID_LENGTH = 256
 
 private fun ExperienceOperationalSnapshotEntity.toExperienceState(): ExperienceState {
-    val markerIds = recordMarkers.groupBy(
+    val durableMarkerIds = recordMarkers.groupBy(
         keySelector = ExperienceRecordMarkerEntity::recordType,
         valueTransform = ExperienceRecordMarkerEntity::recordId,
     )
@@ -417,49 +491,70 @@ private fun ExperienceOperationalSnapshotEntity.toExperienceState(): ExperienceS
         version = profile.charterVersion.ifBlank { "Draft 1" },
         adopted = profile.charterAdopted,
     )
-    val serviceInstanceDate = profile.serviceInstanceDate?.let { storedDate ->
+    val activeServiceInstanceId = profile.serviceInstanceId
+    val activeServiceInstanceDate = profile.serviceInstanceDate?.let { storedDate ->
         runCatching { LocalDate.parse(storedDate) }.getOrNull()
     }
-    val hasTrustedServiceInstance = serviceInstanceDate != null
+    val hasTrustedServiceInstance = activeServiceInstanceId != null &&
+        activeServiceInstanceDate != null &&
+        serviceInstances.any { serviceInstance ->
+            serviceInstance.serviceInstanceId == activeServiceInstanceId &&
+                serviceInstance.serviceInstanceDate == activeServiceInstanceDate.toString()
+        }
+    val serviceMarkerIds = if (hasTrustedServiceInstance) {
+        serviceRecordMarkers
+            .filter { marker -> marker.serviceInstanceId == activeServiceInstanceId }
+            .groupBy(
+                keySelector = ExperienceServiceRecordMarkerEntity::recordType,
+                valueTransform = ExperienceServiceRecordMarkerEntity::recordId,
+            )
+    } else {
+        emptyMap()
+    }
     return ExperienceState(
-        serviceInstanceDate = serviceInstanceDate,
+        serviceInstanceId = activeServiceInstanceId.takeIf { hasTrustedServiceInstance },
+        serviceInstanceDate = activeServiceInstanceDate.takeIf { hasTrustedServiceInstance },
         completedPracticeStepIds = if (hasTrustedServiceInstance) {
-            markerIds.ids(ExperienceRecordTypes.COMPLETED_PRACTICE_STEP)
+            serviceMarkerIds.ids(ExperienceRecordTypes.COMPLETED_PRACTICE_STEP)
         } else {
             emptySet()
         },
-        savedPracticeCardIds = markerIds.ids(ExperienceRecordTypes.SAVED_PRACTICE_CARD),
+        savedPracticeCardIds = durableMarkerIds.ids(ExperienceRecordTypes.SAVED_PRACTICE_CARD),
         completedPreflightStepIds = if (hasTrustedServiceInstance) {
-            markerIds.ids(ExperienceRecordTypes.COMPLETED_PREFLIGHT_STEP)
+            serviceMarkerIds.ids(ExperienceRecordTypes.COMPLETED_PREFLIGHT_STEP)
         } else {
             emptySet()
         },
         completedServiceSegmentIds = if (hasTrustedServiceInstance) {
-            markerIds.ids(ExperienceRecordTypes.COMPLETED_SERVICE_SEGMENT)
+            serviceMarkerIds.ids(ExperienceRecordTypes.COMPLETED_SERVICE_SEGMENT)
         } else {
             emptySet()
         },
-        bookmarkedSourceIds = markerIds.ids(ExperienceRecordTypes.BOOKMARKED_SOURCE),
+        bookmarkedSourceIds = durableMarkerIds.ids(ExperienceRecordTypes.BOOKMARKED_SOURCE),
         workspaceName = profile.workspaceName,
         workspaceKind = WorkspaceKind.entries.firstOrNull { it.id == profile.workspaceKind }
             ?: WorkspaceKind.QAHAL,
         roleAssignments = if (hasTrustedServiceInstance) {
-            roleAssignments.mapNotNull { assignment ->
-                ParticipantRole.entries.firstOrNull { it.id == assignment.roleId }
-                    ?.let { role -> role to assignment.assigneeName }
-            }.toMap()
+            roleAssignments
+                .filter { assignment -> assignment.serviceInstanceId == activeServiceInstanceId }
+                .mapNotNull { assignment ->
+                    ParticipantRole.entries.firstOrNull { it.id == assignment.roleId }
+                        ?.let { role -> role to assignment.assigneeName }
+                }.toMap()
         } else {
             emptyMap()
         },
         readingAssignments = if (hasTrustedServiceInstance) {
-            readingAssignments.associate { assignment ->
-                assignment.slotId to assignment.assigneeName
-            }
+            readingAssignments
+                .filter { assignment -> assignment.serviceInstanceId == activeServiceInstanceId }
+                .associate { assignment -> assignment.slotId to assignment.assigneeName }
         } else {
             emptyMap()
         },
         readingPlans = if (hasTrustedServiceInstance) {
-            readingPlans.associate { plan -> plan.slotId to plan.toReadingPlanEntry() }
+            readingPlans
+                .filter { plan -> plan.serviceInstanceId == activeServiceInstanceId }
+                .associate { plan -> plan.slotId to plan.toReadingPlanEntry() }
         } else {
             emptyMap()
         },
@@ -473,16 +568,18 @@ private fun ExperienceOperationalSnapshotEntity.toExperienceState(): ExperienceS
             reviewDate = profile.practiceAdoptionReviewDate,
             recordedBy = profile.practiceAdoptionRecordedBy,
         ),
-        reviewedDossierFactIds = markerIds.ids(ExperienceRecordTypes.REVIEWED_DOSSIER_FACT),
+        reviewedDossierFactIds = durableMarkerIds.ids(ExperienceRecordTypes.REVIEWED_DOSSIER_FACT),
     )
 }
 
-private fun ExperienceState.toOperationalSnapshot(): ExperienceOperationalSnapshotEntity =
-    ExperienceOperationalSnapshotEntity(
+private fun ExperienceState.toOperationalSnapshot(): ExperienceOperationalSnapshotEntity {
+    val serviceInstance = serviceInstanceKey
+    return ExperienceOperationalSnapshotEntity(
         profile = ExperienceProfileEntity(
             workspaceName = workspaceName,
             workspaceKind = workspaceKind.id,
-            serviceInstanceDate = serviceInstanceDate?.toString(),
+            serviceInstanceId = serviceInstance?.occurrenceId,
+            serviceInstanceDate = serviceInstance?.serviceDate?.toString(),
             selectedCommunityOptionId = selectedCommunityOptionId,
             charterPurpose = communityCharter.purpose,
             charterParticipants = communityCharter.participants,
@@ -501,36 +598,71 @@ private fun ExperienceState.toOperationalSnapshot(): ExperienceOperationalSnapsh
             practiceAdoptionRecordedBy = disputedPracticeAdoption.recordedBy,
             legacyDataStoreMigrated = true,
         ),
-        roleAssignments = if (serviceInstanceDate == null) {
+        serviceInstances = serviceInstance?.let { key ->
+            listOf(
+                ExperienceServiceInstanceEntity(
+                    serviceInstanceId = key.occurrenceId,
+                    serviceInstanceDate = key.serviceDate.toString(),
+                ),
+            )
+        }.orEmpty(),
+        roleAssignments = if (serviceInstance == null) {
             emptyList()
         } else {
             roleAssignments.map { (role, assignee) ->
-                ExperienceRoleAssignmentEntity(roleId = role.id, assigneeName = assignee)
+                ExperienceRoleAssignmentEntity(
+                    serviceInstanceId = serviceInstance.occurrenceId,
+                    roleId = role.id,
+                    assigneeName = assignee,
+                )
             }
         },
-        readingAssignments = if (serviceInstanceDate == null) {
+        readingAssignments = if (serviceInstance == null) {
             emptyList()
         } else {
             readingAssignments.map { (slotId, assignee) ->
-                ExperienceReadingAssignmentEntity(slotId = slotId, assigneeName = assignee)
+                ExperienceReadingAssignmentEntity(
+                    serviceInstanceId = serviceInstance.occurrenceId,
+                    slotId = slotId,
+                    assigneeName = assignee,
+                )
             }
         },
-        readingPlans = if (serviceInstanceDate == null) {
+        readingPlans = if (serviceInstance == null) {
             emptyList()
         } else {
-            readingPlans.map { (slotId, plan) -> plan.toEntity(slotId) }
+            readingPlans.map { (slotId, plan) ->
+                plan.toEntity(serviceInstance.occurrenceId, slotId)
+            }
         },
         recordMarkers = buildList {
             addMarkers(ExperienceRecordTypes.SAVED_PRACTICE_CARD, savedPracticeCardIds)
             addMarkers(ExperienceRecordTypes.BOOKMARKED_SOURCE, bookmarkedSourceIds)
             addMarkers(ExperienceRecordTypes.REVIEWED_DOSSIER_FACT, reviewedDossierFactIds)
-            if (serviceInstanceDate != null) {
-                addMarkers(ExperienceRecordTypes.COMPLETED_PRACTICE_STEP, completedPracticeStepIds)
-                addMarkers(ExperienceRecordTypes.COMPLETED_PREFLIGHT_STEP, completedPreflightStepIds)
-                addMarkers(ExperienceRecordTypes.COMPLETED_SERVICE_SEGMENT, completedServiceSegmentIds)
+        },
+        serviceRecordMarkers = if (serviceInstance == null) {
+            emptyList()
+        } else {
+            buildList {
+                addServiceMarkers(
+                    serviceInstance.occurrenceId,
+                    ExperienceRecordTypes.COMPLETED_PRACTICE_STEP,
+                    completedPracticeStepIds,
+                )
+                addServiceMarkers(
+                    serviceInstance.occurrenceId,
+                    ExperienceRecordTypes.COMPLETED_PREFLIGHT_STEP,
+                    completedPreflightStepIds,
+                )
+                addServiceMarkers(
+                    serviceInstance.occurrenceId,
+                    ExperienceRecordTypes.COMPLETED_SERVICE_SEGMENT,
+                    completedServiceSegmentIds,
+                )
             }
         },
     )
+}
 
 private fun MutableList<ExperienceRecordMarkerEntity>.addMarkers(
     recordType: String,
@@ -538,6 +670,22 @@ private fun MutableList<ExperienceRecordMarkerEntity>.addMarkers(
 ) {
     recordIds.forEach { recordId ->
         add(ExperienceRecordMarkerEntity(recordType = recordType, recordId = recordId))
+    }
+}
+
+private fun MutableList<ExperienceServiceRecordMarkerEntity>.addServiceMarkers(
+    serviceInstanceId: String,
+    recordType: String,
+    recordIds: Set<String>,
+) {
+    recordIds.forEach { recordId ->
+        add(
+            ExperienceServiceRecordMarkerEntity(
+                serviceInstanceId = serviceInstanceId,
+                recordType = recordType,
+                recordId = recordId,
+            ),
+        )
     }
 }
 
@@ -565,8 +713,12 @@ private fun ReadingPlanEntry.normalizedForPersistence(): ReadingPlanEntry {
     )
 }
 
-private fun ReadingPlanEntry.toEntity(slotId: String): ExperienceReadingPlanEntity =
+private fun ReadingPlanEntry.toEntity(
+    serviceInstanceId: String,
+    slotId: String,
+): ExperienceReadingPlanEntity =
     ExperienceReadingPlanEntity(
+        serviceInstanceId = serviceInstanceId,
         slotId = slotId,
         portionTitle = portionTitle,
         locator = locator,

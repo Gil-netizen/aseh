@@ -12,6 +12,7 @@ import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertWidthIsAtLeast
@@ -31,15 +32,17 @@ import androidx.core.os.LocaleListCompat
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.rules.ActivityScenarioRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import androidx.test.espresso.Espresso.pressBack
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.platform.io.PlatformTestStorageRegistry
 import androidx.test.rule.GrantPermissionRule
 import io.github.gilnetizen.aseh.core.database.ManualPlaceContext
+import io.github.gilnetizen.aseh.core.model.CalendarRegion
 import io.github.gilnetizen.aseh.core.model.WorkspaceKind
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -75,15 +78,14 @@ class AsehNavigationTest {
   fun resetAppState() {
     runBlocking {
       withTimeout(5_000) {
-        preferencesRepository().setSelectedDestinationId("now")
         manualPlaceContextRepository().clear()
         experienceStateRepository().setWorkspace("", WorkspaceKind.QAHAL)
         experienceStateRepository().setSelectedServicePlan(null)
         workspaceReviewStateRepository()?.clear()
-        preferencesRepository().preferences.first { it.selectedDestinationId == "now" }
         manualPlaceContextRepository().context.first { it == null }
       }
     }
+    synchronizeSelectedDestination("now")
     waitUntilSelected("now")
     waitUntilManualPlaceCleared()
   }
@@ -148,11 +150,8 @@ class AsehNavigationTest {
   @Test
   fun selectedDestinationSurvivesActivityRecreation() {
     composeRule.onNodeWithTag("destination-study").performClick()
-    runBlocking {
-      withTimeout(5_000) {
-        preferencesRepository().preferences.first { it.selectedDestinationId == "study" }
-      }
-    }
+    waitUntilSelected("study")
+    waitUntilPersistedDestination("study")
 
     composeRule.activityRule.scenario.recreate()
     waitUntilSelected("study")
@@ -163,11 +162,8 @@ class AsehNavigationTest {
     listOf("practice", "prayer", "study", "build").forEach { destinationId ->
       composeRule.onNodeWithTag("destination-$destinationId").performClick()
     }
-    runBlocking {
-      withTimeout(5_000) {
-        preferencesRepository().preferences.first { it.selectedDestinationId == "build" }
-      }
-    }
+    waitUntilSelected("build")
+    waitUntilPersistedDestination("build")
 
     composeRule.activityRule.scenario.recreate()
     waitUntilSelected("build")
@@ -203,6 +199,36 @@ class AsehNavigationTest {
     }
     composeRule.onNodeWithTag("app-global-context")
       .assertTextContains("Household", substring = true)
+
+    composeRule.onNodeWithTag("app-global-search").performClick()
+    composeRule.onNodeWithTag("app-global-search-input")
+      .performTextInput("shared-table preparation")
+    composeRule.onNodeWithTag(
+      "app-global-search-result-household:dev.household.synthetic:" +
+        "responsibility:dev.household.responsibility.table",
+    )
+      .assertIsDisplayed()
+      .performClick()
+    waitUntilSelected("build")
+    composeRule.onNodeWithTag("workspace-dashboard").assertIsDisplayed()
+    composeRule.waitUntil(timeoutMillis = 5_000) {
+      runCatching {
+        composeRule.onNodeWithTag("workspace-record-dev.household.responsibility.table")
+          .assertIsFocused()
+      }.isSuccess
+    }
+
+    composeRule.onNodeWithTag("app-global-search").performClick()
+    composeRule.onNodeWithTag("app-global-search-input")
+      .performTextInput("Synthetic household workspace")
+    composeRule.onNodeWithTag("app-global-search-result-household:dev.household.synthetic")
+      .assertIsDisplayed()
+      .performClick()
+    composeRule.waitUntil(timeoutMillis = 5_000) {
+      composeRule.onAllNodesWithTag("workspace-heading").fetchSemanticsNodes().isNotEmpty()
+    }
+    composeRule.waitForIdle()
+    composeRule.onNodeWithTag("workspace-heading").assertIsFocused()
   }
 
   @Test
@@ -219,7 +245,7 @@ class AsehNavigationTest {
     waitUntilSelected("prayer")
     composeRule.onNodeWithTag("prayer-screen").assertIsDisplayed()
 
-    pressBack()
+    pressSystemBack()
     waitUntilSelected("now")
     composeRule.onNodeWithTag("now-functional-open-practice")
       .performScrollTo()
@@ -228,7 +254,7 @@ class AsehNavigationTest {
     waitUntilSelected("practice")
     composeRule.onNodeWithTag("practice-catalog").assertIsDisplayed()
 
-    pressBack()
+    pressSystemBack()
     waitUntilSelected("now")
     composeRule.onNodeWithTag("now-functional-open-build")
       .performScrollTo()
@@ -292,14 +318,15 @@ class AsehNavigationTest {
     setApplicationLanguage("en")
 
     composeRule.onNodeWithTag("destination-practice").performClick()
+    composeRule.onNodeWithTag("practice-catalog")
+      .performScrollToNode(hasTestTag("practice-card-practice.rehearsal.team"))
     composeRule.onNodeWithTag("practice-card-practice.rehearsal.team")
-      .performScrollTo()
       .performClick()
     composeRule.onNodeWithTag("practice-detail").assertIsDisplayed()
-    pressBack()
+    pressSystemBack()
     composeRule.onNodeWithTag("practice-catalog").assertIsDisplayed()
 
-    pressBack()
+    pressSystemBack()
     waitUntilSelected("now")
 
     composeRule.onNodeWithTag("destination-study").performClick()
@@ -307,21 +334,62 @@ class AsehNavigationTest {
       .performScrollTo()
       .performClick()
     composeRule.onNodeWithTag("study-source-heading").assertIsDisplayed()
-    pressBack()
+    pressSystemBack()
     composeRule.onNodeWithTag("study-heading").assertIsDisplayed()
 
-    pressBack()
+    pressSystemBack()
     waitUntilSelected("now")
 
+    runBlocking {
+      manualPlaceContextRepository().save(
+        ManualPlaceContext(
+          label = "Navigation test place",
+          latitudeDegrees = 31.778,
+          longitudeDegrees = 35.235,
+          elevationMeters = null,
+          timeZoneId = "Asia/Jerusalem",
+        ),
+      )
+      manualPlaceContextRepository().context.first { it != null }
+      experienceStateRepository().setCalendarRegion(CalendarRegion.ISRAEL)
+    }
+    composeRule.waitUntil(timeoutMillis = 5_000) {
+      runBlocking(Dispatchers.IO) {
+        withTimeoutOrNull(250) {
+          experienceStateRepository().state.first { state -> state.serviceInstanceKey != null }
+          true
+        } == true
+      }
+    }
+
     composeRule.onNodeWithTag("destination-prayer").performClick()
+    composeRule.onNodeWithTag("prayer-screen")
+      .performScrollToNode(hasTestTag("prayer-preview-with-blockers"))
     composeRule.onNodeWithTag("prayer-preview-with-blockers")
-      .performScrollTo()
       .performClick()
     composeRule.onNodeWithTag("prayer-focused-conductor").assertIsDisplayed()
-    pressBack()
+    pressSystemBack()
     composeRule.onNodeWithTag("prayer-screen").assertIsDisplayed()
 
-    pressBack()
+    pressSystemBack()
+    waitUntilSelected("now")
+
+    composeRule.onNodeWithTag("destination-build").performClick()
+    composeRule.onNodeWithTag("workspace-dashboard").assertIsDisplayed()
+    composeRule.onNodeWithTag("workspace-edit-name").performClick()
+    composeRule.onNodeWithTag("workspace-editor-name").assertIsDisplayed()
+    pressSystemBack()
+    composeRule.onNodeWithTag("workspace-dashboard").assertIsDisplayed()
+    composeRule.onAllNodesWithTag("workspace-editor-name").assertCountEquals(0)
+
+    composeRule.onNodeWithTag("workspace-edit-name").performClick()
+    composeRule.onNodeWithTag("workspace-editor-name").assertIsDisplayed()
+    composeRule.onNodeWithTag("workspace-open-service-setup").performClick()
+    composeRule.onNodeWithTag("build-heading").assertIsDisplayed()
+    pressSystemBack()
+    composeRule.onNodeWithTag("workspace-dashboard").assertIsDisplayed()
+
+    pressSystemBack()
     waitUntilSelected("now")
   }
 
@@ -484,6 +552,29 @@ class AsehNavigationTest {
       runCatching {
         composeRule.onNodeWithTag("destination-$destinationId").assertIsSelected()
       }.isSuccess
+    }
+  }
+
+  private fun synchronizeSelectedDestination(destinationId: String) {
+    appGraph().setSelectedDestinationId(TEST_NAVIGATION_BARRIER_ID)
+    waitUntilPersistedDestination(TEST_NAVIGATION_BARRIER_ID)
+    appGraph().setSelectedDestinationId(destinationId)
+    waitUntilPersistedDestination(destinationId)
+  }
+
+  private fun waitUntilPersistedDestination(destinationId: String) {
+    composeRule.waitUntil(timeoutMillis = 5_000) {
+      runBlocking(Dispatchers.IO) {
+        withTimeoutOrNull(250) {
+          preferencesRepository().preferences.first().selectedDestinationId == destinationId
+        } == true
+      }
+    }
+  }
+
+  private fun pressSystemBack() {
+    composeRule.runOnIdle {
+      composeRule.activity.onBackPressedDispatcher.onBackPressed()
     }
   }
 
@@ -700,6 +791,7 @@ class AsehNavigationTest {
   }
 
   private companion object {
+    const val TEST_NAVIGATION_BARRIER_ID = "test_sync"
     val destinationIds = listOf("now", "practice", "prayer", "study", "build")
 
     val syntheticManualPlace = ManualPlaceContext(

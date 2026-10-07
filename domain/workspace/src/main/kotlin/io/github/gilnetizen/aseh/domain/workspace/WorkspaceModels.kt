@@ -273,3 +273,39 @@ data class WorkspaceSnapshot(
     val households: List<HouseholdWorkspace> = emptyList(),
     val qahalWorkspaces: List<QahalWorkspace> = emptyList(),
 )
+
+/** Stable identity for opening one exact workspace record from device-local search. */
+enum class WorkspaceRecordKind {
+    WORKSPACE,
+    PERSONAL_PRACTICE,
+    HOUSEHOLD_RESPONSIBILITY,
+    HOUSEHOLD_CALENDAR_ITEM,
+    HOUSEHOLD_PREPARATION_KIT,
+    PREPARATION_KIT_TASK,
+    QAHAL_DECISION,
+    VOLUNTEER_ROTATION,
+    VOLUNTEER_SLOT,
+    INVENTORY_ITEM,
+    FINANCIAL_CHECKLIST,
+    FINANCIAL_CONTROL,
+}
+
+data class WorkspaceRecordAddress(
+    val workspaceId: WorkspaceId,
+    val kind: WorkspaceRecordKind,
+    val recordId: WorkspaceRecordId? = null,
+    val parentRecordId: WorkspaceRecordId? = null,
+) {
+    init {
+        require((kind == WorkspaceRecordKind.WORKSPACE) == (recordId == null)) {
+            "Only a workspace search target may omit a record ID"
+        }
+        require(
+            parentRecordId == null || kind in setOf(
+                WorkspaceRecordKind.PREPARATION_KIT_TASK,
+                WorkspaceRecordKind.VOLUNTEER_SLOT,
+                WorkspaceRecordKind.FINANCIAL_CONTROL,
+            ),
+        ) { "Only a nested workspace record may include a parent ID" }
+    }
+}

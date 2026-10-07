@@ -9,6 +9,10 @@
     <string name="feature_practice_overall_progress">All practice guides</string>
     <string name="feature_practice_card_progress">Guide progress</string>
     <string name="feature_practice_step_progress">%1$d of %2$d steps complete</string>
+    <string name="feature_practice_progress_unavailable_title">Practice progress is unavailable</string>
+    <string name="feature_practice_progress_unavailable_body">Choose a rehearsal-capable service in Pray or finish service setup in Build before recording step progress. You can still read every guide.</string>
+    <string name="feature_practice_progress_activating_title">Activating selected service</string>
+    <string name="feature_practice_progress_activating_body">ASEH is loading this dated occurrence from local storage. You can read every guide; progress controls will become available when activation finishes.</string>
     <string name="feature_practice_open_prayer">Open prayer rehearsal</string>
     <string name="feature_practice_open_guide">Open guide</string>
     <string name="feature_practice_saved_indicator">Saved as a local practice</string>
