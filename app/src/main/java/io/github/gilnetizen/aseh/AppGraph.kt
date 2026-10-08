@@ -12,6 +12,7 @@ import io.github.gilnetizen.aseh.core.database.OperationalStoreFactory
 import io.github.gilnetizen.aseh.location.AndroidDeviceLocationClient
 import io.github.gilnetizen.aseh.location.DeviceLocationClient
 import io.github.gilnetizen.aseh.core.model.DemonstratorCatalog
+import io.github.gilnetizen.aseh.core.model.IndividualPrayerService
 import io.github.gilnetizen.aseh.domain.servicecatalog.ServiceCatalog
 import java.io.Closeable
 import java.time.Clock
@@ -59,6 +60,7 @@ class AppGraph(context: Context) : Closeable {
     operationalStore.experienceStateRepository
 
   val contentCatalog: DemonstratorCatalog? = flavorContentCatalog()
+  val individualPrayerService: IndividualPrayerService? = flavorIndividualPrayerService()
   val serviceCatalog: ServiceCatalog? = flavorServiceCatalog()
   val workspaceReviewStateRepository: WorkspaceReviewStateRepository? =
     flavorWorkspaceFixture()?.let { fixture ->

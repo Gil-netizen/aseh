@@ -49,9 +49,10 @@ import io.github.gilnetizen.aseh.core.database.ManualPlaceContext
 import io.github.gilnetizen.aseh.core.database.ManualPlaceContextRepository
 import io.github.gilnetizen.aseh.core.database.PlaceContextSource
 import io.github.gilnetizen.aseh.core.designsystem.AsehTheme
+import io.github.gilnetizen.aseh.core.model.CalendarRegion
 import io.github.gilnetizen.aseh.core.model.DemonstratorCatalog
 import io.github.gilnetizen.aseh.core.model.ExperienceState
-import io.github.gilnetizen.aseh.core.model.CalendarRegion
+import io.github.gilnetizen.aseh.core.model.IndividualPrayerService
 import io.github.gilnetizen.aseh.core.model.ServiceCoordinates
 import io.github.gilnetizen.aseh.core.model.ServiceDateContext
 import io.github.gilnetizen.aseh.core.model.ServiceDayKind
@@ -82,6 +83,7 @@ import io.github.gilnetizen.aseh.feature.now.NowPlaceContext
 import io.github.gilnetizen.aseh.feature.now.NowPlaceSource
 import io.github.gilnetizen.aseh.feature.now.DeviceLocationUiState
 import io.github.gilnetizen.aseh.feature.practice.PracticeScreen
+import io.github.gilnetizen.aseh.feature.prayer.IndividualPrayerScreen
 import io.github.gilnetizen.aseh.feature.prayer.PrayerScreen
 import io.github.gilnetizen.aseh.feature.study.StudyScreen
 import io.github.gilnetizen.aseh.feature.workspace.ActiveWorkspaceContext
@@ -142,6 +144,7 @@ fun AsehApp(
   manualPlaceContextRepository: ManualPlaceContextRepository,
   experienceStateRepository: ExperienceStateRepository? = null,
   contentCatalog: DemonstratorCatalog? = null,
+  individualPrayerService: IndividualPrayerService? = null,
   serviceCatalog: ServiceCatalog? = null,
   workspaceReviewStateRepository: WorkspaceReviewStateRepository? = null,
   deviceLocationClient: DeviceLocationClient? = null,
@@ -482,6 +485,18 @@ fun AsehApp(
     selectedScheduledService?.id ?: requestedScheduledServiceId
   val selectedServiceInstanceKey = selectedScheduledService
     ?.rehearsalServiceInstanceKeyOrNull()
+  val individualPrayerInstanceKey = remember(individualPrayerService, experienceLocalDate) {
+    individualPrayerService?.let { service ->
+      individualPrayerServiceInstanceKey(service, experienceLocalDate)
+    }
+  }
+  val requestedActiveServiceInstanceKey = if (
+    selectedDestination == AsehDestination.PRAYER && individualPrayerInstanceKey != null
+  ) {
+    individualPrayerInstanceKey
+  } else {
+    selectedServiceInstanceKey
+  }
   val selectedServiceSupportsRehearsal = selectedServiceInstanceKey != null
   val writableServiceInstanceKey = writableServiceInstanceKey(
     selected = selectedServiceInstanceKey,
@@ -491,8 +506,14 @@ fun AsehApp(
   val selectedServiceOccurrenceActivating =
     selectedServiceSupportsRehearsal && !selectedServiceOccurrenceReady
   val selectedServiceWriteKey = remember { AtomicReference<ServiceInstanceKey?>(null) }
+  val writableIndividualPrayerInstanceKey = writableServiceInstanceKey(
+    selected = individualPrayerInstanceKey,
+    persistedActive = persistedExperienceState.serviceInstanceKey,
+  )
+  val individualPrayerWriteKey = remember { AtomicReference<ServiceInstanceKey?>(null) }
   SideEffect {
     selectedServiceWriteKey.set(writableServiceInstanceKey)
+    individualPrayerWriteKey.set(writableIndividualPrayerInstanceKey)
   }
   LaunchedEffect(
     serviceSelection,
@@ -522,6 +543,13 @@ fun AsehApp(
     selectedServiceInstanceKey,
   ) {
     selectedServiceInstanceKey?.let(persistedExperienceState::forServiceInstance)
+      ?: persistedExperienceState.withoutServiceInstanceProgress()
+  }
+  val individualPrayerExperienceState = remember(
+    persistedExperienceState,
+    individualPrayerInstanceKey,
+  ) {
+    individualPrayerInstanceKey?.let(persistedExperienceState::forServiceInstance)
       ?: persistedExperienceState.withoutServiceInstanceProgress()
   }
   val activeWorkspaceContext = remember(
@@ -606,19 +634,19 @@ fun AsehApp(
   LaunchedEffect(
     experienceStateRepository,
     manualPlaceContextReady,
-    selectedServiceInstanceKey,
+    requestedActiveServiceInstanceKey,
     persistedExperienceState.serviceInstanceKey,
   ) {
     if (
       manualPlaceContextReady &&
       experienceStateRepository != null &&
-      persistedExperienceState.serviceInstanceKey != selectedServiceInstanceKey
+      persistedExperienceState.serviceInstanceKey != requestedActiveServiceInstanceKey
     ) {
       localUserDataMutationGate.mutate {
-        if (selectedServiceInstanceKey == null) {
+        if (requestedActiveServiceInstanceKey == null) {
           experienceStateRepository.deactivateServiceInstance()
         } else {
-          experienceStateRepository.activateServiceInstance(selectedServiceInstanceKey)
+          experienceStateRepository.activateServiceInstance(requestedActiveServiceInstanceKey)
         }
       }
     }
@@ -1024,75 +1052,106 @@ fun AsehApp(
                 },
                 onOpenPrayer = { navigateTo(AsehDestination.PRAYER) },
               )
-              AsehDestination.PRAYER -> PrayerScreen(
-                catalog = contentCatalog,
-                state = experienceState,
-                dateLabel = experienceDateLabel,
-                locationLabel = experienceLocationLabel,
-                assemblyContext = experienceAssemblyContext,
-                serviceSelection = serviceSelection,
-                selectedScheduledServiceId = selectedScheduledServiceId,
-                selectedScheduledService = selectedScheduledService,
-                selectedServiceContentSupported = selectedServiceSupportsRehearsal,
-                serviceOccurrenceReady = selectedServiceOccurrenceReady,
-                onScheduledServiceSelected = { serviceId ->
-                  selectedServiceWriteKey.set(null)
-                  selectedScheduledServiceIdOverride = serviceId
-                  launchUserDataMutation {
-                    experienceStateRepository?.setSelectedServicePlan(serviceId)
-                  }
-                },
-                onRoleSelected = { role ->
-                  launchUserDataMutation {
-                    experienceStateRepository?.setSelectedRole(role)
-                  }
-                },
-                onPreflightCompleted = { id, completed ->
-                  dispatchServiceOccurrenceWrite(selectedServiceWriteKey.get()) { serviceInstance ->
-                    launchUserDataMutation {
-                      if (selectedServiceWriteKey.get() == serviceInstance) {
-                        experienceStateRepository?.setPreflightStepCompleted(
-                          serviceInstance,
-                          id,
-                          completed,
-                        )
+              AsehDestination.PRAYER -> if (individualPrayerService != null) {
+                IndividualPrayerScreen(
+                  service = individualPrayerService,
+                  state = individualPrayerExperienceState,
+                  dateLabel = serviceDateLabel(experienceLocalDate),
+                  locationLabel = experienceLocationLabel,
+                  onSegmentCompleted = { id, completed ->
+                    dispatchServiceOccurrenceWrite(individualPrayerWriteKey.get()) { serviceInstance ->
+                      launchUserDataMutation {
+                        if (individualPrayerWriteKey.get() == serviceInstance) {
+                          experienceStateRepository?.setServiceSegmentCompleted(
+                            serviceInstance,
+                            id,
+                            completed,
+                          )
+                        }
                       }
                     }
-                  }
-                },
-                onSegmentCompleted = { id, completed ->
-                  dispatchServiceOccurrenceWrite(selectedServiceWriteKey.get()) { serviceInstance ->
+                  },
+                  onSharePacket = sharePacket,
+                  onPrintPacket = { packet ->
+                    printServicePacket(
+                      context = context,
+                      title = "ASEH weekday individual prayer",
+                      packet = packet,
+                      largeText = individualPrayerExperienceState.accessibilityProfile.useLargeText,
+                    )
+                  },
+                )
+              } else {
+                PrayerScreen(
+                  catalog = contentCatalog,
+                  state = experienceState,
+                  dateLabel = experienceDateLabel,
+                  locationLabel = experienceLocationLabel,
+                  assemblyContext = experienceAssemblyContext,
+                  serviceSelection = serviceSelection,
+                  selectedScheduledServiceId = selectedScheduledServiceId,
+                  selectedScheduledService = selectedScheduledService,
+                  selectedServiceContentSupported = selectedServiceSupportsRehearsal,
+                  serviceOccurrenceReady = selectedServiceOccurrenceReady,
+                  onScheduledServiceSelected = { serviceId ->
+                    selectedServiceWriteKey.set(null)
+                    selectedScheduledServiceIdOverride = serviceId
                     launchUserDataMutation {
-                      if (selectedServiceWriteKey.get() == serviceInstance) {
-                        experienceStateRepository?.setServiceSegmentCompleted(
-                          serviceInstance,
-                          id,
-                          completed,
-                        )
+                      experienceStateRepository?.setSelectedServicePlan(serviceId)
+                    }
+                  },
+                  onRoleSelected = { role ->
+                    launchUserDataMutation {
+                      experienceStateRepository?.setSelectedRole(role)
+                    }
+                  },
+                  onPreflightCompleted = { id, completed ->
+                    dispatchServiceOccurrenceWrite(selectedServiceWriteKey.get()) { serviceInstance ->
+                      launchUserDataMutation {
+                        if (selectedServiceWriteKey.get() == serviceInstance) {
+                          experienceStateRepository?.setPreflightStepCompleted(
+                            serviceInstance,
+                            id,
+                            completed,
+                          )
+                        }
                       }
                     }
-                  }
-                },
-                onOpenSource = { sourceId ->
-                  requestedStudySourceId = sourceId
-                  navigateTo(AsehDestination.STUDY)
-                },
-                onOpenPractice = { navigateTo(AsehDestination.PRACTICE) },
-                onOpenBuild = {
-                  serviceSetupSelected = true
-                  navigateTo(AsehDestination.BUILD)
-                },
-                onOpenNow = { navigateTo(AsehDestination.NOW) },
-                onSharePacket = sharePacket,
-                onPrintPacket = { packet ->
-                  printServicePacket(
-                    context = context,
-                    title = "ASEH Shabbat rehearsal",
-                    packet = packet,
-                    largeText = experienceState.accessibilityProfile.useLargeText,
-                  )
-                },
-              )
+                  },
+                  onSegmentCompleted = { id, completed ->
+                    dispatchServiceOccurrenceWrite(selectedServiceWriteKey.get()) { serviceInstance ->
+                      launchUserDataMutation {
+                        if (selectedServiceWriteKey.get() == serviceInstance) {
+                          experienceStateRepository?.setServiceSegmentCompleted(
+                            serviceInstance,
+                            id,
+                            completed,
+                          )
+                        }
+                      }
+                    }
+                  },
+                  onOpenSource = { sourceId ->
+                    requestedStudySourceId = sourceId
+                    navigateTo(AsehDestination.STUDY)
+                  },
+                  onOpenPractice = { navigateTo(AsehDestination.PRACTICE) },
+                  onOpenBuild = {
+                    serviceSetupSelected = true
+                    navigateTo(AsehDestination.BUILD)
+                  },
+                  onOpenNow = { navigateTo(AsehDestination.NOW) },
+                  onSharePacket = sharePacket,
+                  onPrintPacket = { packet ->
+                    printServicePacket(
+                      context = context,
+                      title = "ASEH Shabbat rehearsal",
+                      packet = packet,
+                      largeText = experienceState.accessibilityProfile.useLargeText,
+                    )
+                  },
+                )
+              }
               AsehDestination.STUDY -> StudyScreen(
                 catalog = contentCatalog,
                 state = experienceState,
@@ -1311,10 +1370,11 @@ fun AsehApp(
                               workspaceReviewStateRepository?.clear()
                             }.isFailure
                             coreResult to workspaceFailed
-                          }
+                        }
                         if (result.isComplete && !workspaceDeletionFailed) {
                           selectedDestinationOverride = null
                           selectedServiceWriteKey.set(null)
+                          individualPrayerWriteKey.set(null)
                           selectedScheduledServiceIdOverride = null
                           globalSearchOpen = false
                           contextChooserOpen = false
@@ -1340,6 +1400,14 @@ fun AsehApp(
 }
 
 internal const val SHABBAT_MORNING_REHEARSAL_SERVICE_ID = "dev.service.shabbat.morning"
+
+internal fun individualPrayerServiceInstanceKey(
+  service: IndividualPrayerService,
+  serviceDate: LocalDate,
+): ServiceInstanceKey = ServiceInstanceKey(
+  occurrenceId = "${service.id}@$serviceDate#individual",
+  serviceDate = serviceDate,
+)
 
 private val serviceOccurrenceDateFormatter: DateTimeFormatter =
   DateTimeFormatter.ofPattern("EEEE, MMMM d", Locale.ENGLISH)
