@@ -17,8 +17,8 @@ android {
     applicationId = "io.github.gilnetizen.aseh"
     minSdk = 26
     targetSdk = 37
-    versionCode = 5
-    versionName = "0.1.0-alpha.5"
+    versionCode = 10
+    versionName = "0.1.0-alpha.10"
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     testInstrumentationRunnerArguments["useTestStorageService"] = "true"
   }
@@ -42,7 +42,10 @@ android {
   productFlavors {
     create("dev") {
       dimension = "environment"
-      applicationIdSuffix = ".dev"
+      // CI debug certificates are intentionally ephemeral. Give this review
+      // build its own package so testers can install it beside earlier alphas
+      // without an opaque signature-mismatch failure.
+      applicationIdSuffix = ".dev.alpha10"
       versionNameSuffix = "-dev"
     }
     create("staging") {
@@ -65,6 +68,8 @@ android {
   }
 
   packaging {
+    resources.pickFirsts += "/META-INF/LICENSE-kosherjava-zmanim.txt"
+    resources.pickFirsts += "/META-INF/NOTICE-kosherjava-zmanim.txt"
     resources.excludes += setOf(
       "/META-INF/AL2.0",
       "/META-INF/LGPL2.1",
@@ -80,12 +85,18 @@ android {
 dependencies {
   implementation(project(":core:database"))
   implementation(project(":core:designsystem"))
+  implementation(project(":core:model"))
   implementation(project(":core:ui"))
+  implementation(project(":domain:zmanim"))
+  implementation(project(":domain:calendar"))
+  implementation(project(":domain:servicecatalog"))
+  implementation(project(":domain:workspace"))
   implementation(project(":feature:build"))
   implementation(project(":feature:now"))
   implementation(project(":feature:practice"))
   implementation(project(":feature:prayer"))
   implementation(project(":feature:study"))
+  implementation(project(":feature:workspace"))
 
   implementation(libs.androidx.core.ktx)
   implementation(libs.androidx.activity.compose)

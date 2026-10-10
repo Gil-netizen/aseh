@@ -17,8 +17,15 @@ class MainActivity : AppCompatActivity() {
         deviceTimeZone = graph.deviceTimeZone,
         interfacePreferencesRepository = graph.interfacePreferencesRepository,
         manualPlaceContextRepository = graph.manualPlaceContextRepository,
+        experienceStateRepository = graph.experienceStateRepository,
+        contentCatalog = graph.contentCatalog,
+        individualPrayerServices = graph.individualPrayerServices,
+        serviceCatalog = graph.serviceCatalog,
+        workspaceReviewStateRepository = graph.workspaceReviewStateRepository,
         deviceLocationClient = graph.deviceLocationClient,
+        userDataMutationGate = graph.localUserDataMutationGate,
         onSelectedDestinationChanged = graph::setSelectedDestinationId,
+        onUserDataMutation = graph::launchUserDataMutation,
       )
     }
   }

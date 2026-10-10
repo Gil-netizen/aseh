@@ -3,4 +3,20 @@
     <string name="feature_build_title">Build</string>
     <string name="feature_build_placeholder">Placeholder only. Reviewed content is not included in this build.</string>
     <string name="feature_build_mixed_script_fixture">ABC · &#x2068;אבג&#x2069; · 123</string>
+    <string name="feature_build_review_share">Review the exact packet before sharing</string>
+    <string name="feature_build_review_print">Review the exact packet before printing</string>
+    <string name="feature_build_accessible_equivalent">The shared structured text below is the accessible equivalent of the visual PDF.</string>
+    <string name="feature_build_export_disclosure">Nothing leaves ASEH until you continue. ASEH cannot erase copies after you share, print, or save them elsewhere.</string>
+    <string name="feature_build_confirm_share">Continue to share</string>
+    <string name="feature_build_confirm_print">Continue to print</string>
+    <string name="feature_build_cancel_export">Cancel</string>
+    <string name="feature_build_local_data_title">Local data and preferences</string>
+    <string name="feature_build_local_data_body">Delete the saved place or GPS fix, interface preferences, workspace, calendar, access, assignments, decisions, study state, and rehearsal progress from this device.</string>
+    <string name="feature_build_delete_local_data">Delete all local user data</string>
+    <string name="feature_build_deleting_local_data">Deleting local data…</string>
+    <string name="feature_build_delete_local_data_failed">Some local data could not be deleted. Other categories were still attempted. Retry this action and verify that the saved place and workspace are gone.</string>
+    <string name="feature_build_delete_confirmation_title">Delete all local user data?</string>
+    <string name="feature_build_delete_confirmation_body">This permanently deletes the saved place or GPS fix and interface preferences, plus the workspace, calendar and access settings, role and Torah-reading assignments, output and community choices, charter and dossier review, practice and service progress, saved cards, and source bookmarks. Installed public content remains available. ASEH cannot erase packets already shared, printed, or saved elsewhere.</string>
+    <string name="feature_build_confirm_delete_local_data">Delete all local data</string>
+    <string name="feature_build_cancel_delete_local_data">Keep my data</string>
 </resources>

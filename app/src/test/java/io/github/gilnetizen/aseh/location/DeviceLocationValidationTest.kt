@@ -249,14 +249,16 @@ class DeviceLocationValidationTest {
     val outcome = acquireDeviceLocation(
       providers = listOf(DeviceLocationProvider.GPS, DeviceLocationProvider.NETWORK),
       isApproximate = false,
-      timeoutMillis = 200L,
+      // Leave enough wall-clock margin for a heavily loaded CI worker to resume the
+      // coroutine after the preferred provider's half-budget expires.
+      timeoutMillis = 2_000L,
       maximumAgeNanos = MAXIMUM_AGE_NANOS,
       elapsedRealtimeNanos = { NOW_NANOS },
     ) { provider ->
       requestedProviders += provider
       if (provider == DeviceLocationProvider.GPS) {
         try {
-          delay(1_000L)
+          delay(10_000L)
           null
         } finally {
           firstRequestWasCancelled.set(true)

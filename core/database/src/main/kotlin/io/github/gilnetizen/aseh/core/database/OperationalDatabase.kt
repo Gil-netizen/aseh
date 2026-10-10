@@ -11,6 +11,7 @@ import androidx.room.Query
 import androidx.room.RoomDatabase
 import androidx.room.Transaction
 import androidx.room.migration.Migration
+import androidx.sqlite.execSQL
 
 @Entity(
     tableName = "installed_pack_catalog",
@@ -101,12 +102,24 @@ internal abstract class InstalledPackCatalogDao {
 }
 
 @Database(
-    entities = [InstalledPackCatalogEntity::class],
+    entities = [
+        InstalledPackCatalogEntity::class,
+        ExperienceProfileEntity::class,
+        ExperienceServiceInstanceEntity::class,
+        ExperienceRoleAssignmentEntity::class,
+        ExperienceReadingAssignmentEntity::class,
+        ExperienceReadingPlanEntity::class,
+        ExperienceRecordMarkerEntity::class,
+        ExperienceServiceRecordMarkerEntity::class,
+        WorkspaceSnapshotStateEntity::class,
+    ],
     version = OPERATIONAL_DATABASE_VERSION,
     exportSchema = true,
 )
 internal abstract class OperationalDatabase : RoomDatabase() {
     abstract fun installedPackCatalogDao(): InstalledPackCatalogDao
+    abstract fun experienceStateDao(): ExperienceStateDao
+    abstract fun workspaceStateDao(): WorkspaceStateDao
 }
 
 /**
@@ -115,8 +128,329 @@ internal abstract class OperationalDatabase : RoomDatabase() {
  */
 internal object OperationalDatabaseMigrations {
     val all: Array<Migration>
-        get() = emptyArray()
+        get() = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+
+    private val MIGRATION_1_2 = object : Migration(1, 2) {
+        override fun migrate(connection: androidx.sqlite.SQLiteConnection) {
+            connection.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `experience_profile` (
+                    `profile_id` INTEGER NOT NULL,
+                    `workspace_name` TEXT NOT NULL,
+                    `workspace_kind` TEXT NOT NULL,
+                    `selected_community_option_id` TEXT,
+                    `charter_purpose` TEXT NOT NULL,
+                    `charter_participants` TEXT NOT NULL,
+                    `charter_authority_limits` TEXT NOT NULL,
+                    `charter_decision_process` TEXT NOT NULL,
+                    `charter_role_terms` TEXT NOT NULL,
+                    `charter_accessibility_commitment` TEXT NOT NULL,
+                    `charter_effective_date` TEXT NOT NULL,
+                    `charter_review_date` TEXT NOT NULL,
+                    `charter_version` TEXT NOT NULL,
+                    `charter_adopted` INTEGER NOT NULL,
+                    `practice_adoption_option_id` TEXT,
+                    `practice_adoption_scope` TEXT NOT NULL,
+                    `practice_adoption_effective_date` TEXT NOT NULL,
+                    `practice_adoption_review_date` TEXT NOT NULL,
+                    `practice_adoption_recorded_by` TEXT NOT NULL,
+                    `legacy_datastore_migrated` INTEGER NOT NULL,
+                    PRIMARY KEY(`profile_id`)
+                )
+                """.trimIndent(),
+            )
+            connection.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `experience_role_assignment` (
+                    `profile_id` INTEGER NOT NULL,
+                    `role_id` TEXT NOT NULL,
+                    `assignee_name` TEXT NOT NULL,
+                    PRIMARY KEY(`profile_id`, `role_id`),
+                    FOREIGN KEY(`profile_id`) REFERENCES `experience_profile`(`profile_id`)
+                        ON UPDATE NO ACTION ON DELETE CASCADE
+                )
+                """.trimIndent(),
+            )
+            connection.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `experience_reading_assignment` (
+                    `profile_id` INTEGER NOT NULL,
+                    `slot_id` TEXT NOT NULL,
+                    `assignee_name` TEXT NOT NULL,
+                    PRIMARY KEY(`profile_id`, `slot_id`),
+                    FOREIGN KEY(`profile_id`) REFERENCES `experience_profile`(`profile_id`)
+                        ON UPDATE NO ACTION ON DELETE CASCADE
+                )
+                """.trimIndent(),
+            )
+            connection.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `experience_reading_plan` (
+                    `profile_id` INTEGER NOT NULL,
+                    `slot_id` TEXT NOT NULL,
+                    `portion_title` TEXT NOT NULL,
+                    `locator` TEXT NOT NULL,
+                    `passage_range` TEXT NOT NULL,
+                    `assignee_name` TEXT NOT NULL,
+                    `backup_assignee_name` TEXT NOT NULL,
+                    `preparation_status` TEXT NOT NULL,
+                    `manual_override` INTEGER NOT NULL,
+                    `override_reason` TEXT NOT NULL,
+                    PRIMARY KEY(`profile_id`, `slot_id`),
+                    FOREIGN KEY(`profile_id`) REFERENCES `experience_profile`(`profile_id`)
+                        ON UPDATE NO ACTION ON DELETE CASCADE
+                )
+                """.trimIndent(),
+            )
+            connection.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `experience_record_marker` (
+                    `profile_id` INTEGER NOT NULL,
+                    `record_type` TEXT NOT NULL,
+                    `record_id` TEXT NOT NULL,
+                    PRIMARY KEY(`profile_id`, `record_type`, `record_id`),
+                    FOREIGN KEY(`profile_id`) REFERENCES `experience_profile`(`profile_id`)
+                        ON UPDATE NO ACTION ON DELETE CASCADE
+                )
+                """.trimIndent(),
+            )
+        }
+    }
+
+    private val MIGRATION_2_3 = object : Migration(2, 3) {
+        override fun migrate(connection: androidx.sqlite.SQLiteConnection) {
+            connection.execSQL(
+                "ALTER TABLE `experience_profile` ADD COLUMN `service_instance_date` TEXT",
+            )
+
+            // Version 2 had no service-instance key, so attaching any of these records to the
+            // device's newly calculated Shabbat would silently relabel unknown old state. Fail
+            // closed while retaining workspace, governance, saved cards, bookmarks, and dossier
+            // review markers.
+            connection.execSQL("DELETE FROM `experience_role_assignment`")
+            connection.execSQL("DELETE FROM `experience_reading_assignment`")
+            connection.execSQL("DELETE FROM `experience_reading_plan`")
+            connection.execSQL(
+                """
+                DELETE FROM `experience_record_marker`
+                WHERE `record_type` IN (
+                    'completed_practice_step',
+                    'completed_preflight_step',
+                    'completed_service_segment'
+                )
+                """.trimIndent(),
+            )
+        }
+    }
+
+    private val MIGRATION_3_4 = object : Migration(3, 4) {
+        override fun migrate(connection: androidx.sqlite.SQLiteConnection) {
+            connection.execSQL(
+                "ALTER TABLE `experience_profile` ADD COLUMN `service_instance_id` TEXT",
+            )
+            connection.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `experience_service_instance` (
+                    `profile_id` INTEGER NOT NULL,
+                    `service_instance_id` TEXT NOT NULL,
+                    `service_instance_date` TEXT NOT NULL,
+                    PRIMARY KEY(`profile_id`, `service_instance_id`),
+                    FOREIGN KEY(`profile_id`) REFERENCES `experience_profile`(`profile_id`)
+                        ON UPDATE NO ACTION ON DELETE CASCADE
+                )
+                """.trimIndent(),
+            )
+            // Version 3 identified the active occurrence only by date. Preserve it under an
+            // explicitly legacy identity so no schedule/profile identity is fabricated.
+            connection.execSQL(
+                """
+                INSERT INTO `experience_service_instance` (
+                    `profile_id`, `service_instance_id`, `service_instance_date`
+                )
+                SELECT `profile_id`, 'legacy-date:' || `service_instance_date`,
+                    `service_instance_date`
+                FROM `experience_profile`
+                WHERE `service_instance_date` IS NOT NULL
+                """.trimIndent(),
+            )
+            connection.execSQL(
+                """
+                UPDATE `experience_profile`
+                SET `service_instance_id` = 'legacy-date:' || `service_instance_date`
+                WHERE `service_instance_date` IS NOT NULL
+                """.trimIndent(),
+            )
+
+            connection.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `experience_role_assignment_new` (
+                    `profile_id` INTEGER NOT NULL,
+                    `service_instance_id` TEXT NOT NULL,
+                    `role_id` TEXT NOT NULL,
+                    `assignee_name` TEXT NOT NULL,
+                    PRIMARY KEY(`profile_id`, `service_instance_id`, `role_id`),
+                    FOREIGN KEY(`profile_id`, `service_instance_id`)
+                        REFERENCES `experience_service_instance`(`profile_id`, `service_instance_id`)
+                        ON UPDATE NO ACTION ON DELETE CASCADE
+                )
+                """.trimIndent(),
+            )
+            connection.execSQL(
+                """
+                INSERT INTO `experience_role_assignment_new` (
+                    `profile_id`, `service_instance_id`, `role_id`, `assignee_name`
+                )
+                SELECT assignment.`profile_id`, profile.`service_instance_id`,
+                    assignment.`role_id`, assignment.`assignee_name`
+                FROM `experience_role_assignment` assignment
+                JOIN `experience_profile` profile
+                    ON profile.`profile_id` = assignment.`profile_id`
+                WHERE profile.`service_instance_id` IS NOT NULL
+                """.trimIndent(),
+            )
+            connection.execSQL("DROP TABLE `experience_role_assignment`")
+            connection.execSQL(
+                "ALTER TABLE `experience_role_assignment_new` RENAME TO `experience_role_assignment`",
+            )
+
+            connection.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `experience_reading_assignment_new` (
+                    `profile_id` INTEGER NOT NULL,
+                    `service_instance_id` TEXT NOT NULL,
+                    `slot_id` TEXT NOT NULL,
+                    `assignee_name` TEXT NOT NULL,
+                    PRIMARY KEY(`profile_id`, `service_instance_id`, `slot_id`),
+                    FOREIGN KEY(`profile_id`, `service_instance_id`)
+                        REFERENCES `experience_service_instance`(`profile_id`, `service_instance_id`)
+                        ON UPDATE NO ACTION ON DELETE CASCADE
+                )
+                """.trimIndent(),
+            )
+            connection.execSQL(
+                """
+                INSERT INTO `experience_reading_assignment_new` (
+                    `profile_id`, `service_instance_id`, `slot_id`, `assignee_name`
+                )
+                SELECT assignment.`profile_id`, profile.`service_instance_id`,
+                    assignment.`slot_id`, assignment.`assignee_name`
+                FROM `experience_reading_assignment` assignment
+                JOIN `experience_profile` profile
+                    ON profile.`profile_id` = assignment.`profile_id`
+                WHERE profile.`service_instance_id` IS NOT NULL
+                """.trimIndent(),
+            )
+            connection.execSQL("DROP TABLE `experience_reading_assignment`")
+            connection.execSQL(
+                "ALTER TABLE `experience_reading_assignment_new` RENAME TO `experience_reading_assignment`",
+            )
+
+            connection.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `experience_reading_plan_new` (
+                    `profile_id` INTEGER NOT NULL,
+                    `service_instance_id` TEXT NOT NULL,
+                    `slot_id` TEXT NOT NULL,
+                    `portion_title` TEXT NOT NULL,
+                    `locator` TEXT NOT NULL,
+                    `passage_range` TEXT NOT NULL,
+                    `assignee_name` TEXT NOT NULL,
+                    `backup_assignee_name` TEXT NOT NULL,
+                    `preparation_status` TEXT NOT NULL,
+                    `manual_override` INTEGER NOT NULL,
+                    `override_reason` TEXT NOT NULL,
+                    PRIMARY KEY(`profile_id`, `service_instance_id`, `slot_id`),
+                    FOREIGN KEY(`profile_id`, `service_instance_id`)
+                        REFERENCES `experience_service_instance`(`profile_id`, `service_instance_id`)
+                        ON UPDATE NO ACTION ON DELETE CASCADE
+                )
+                """.trimIndent(),
+            )
+            connection.execSQL(
+                """
+                INSERT INTO `experience_reading_plan_new` (
+                    `profile_id`, `service_instance_id`, `slot_id`, `portion_title`, `locator`,
+                    `passage_range`, `assignee_name`, `backup_assignee_name`,
+                    `preparation_status`, `manual_override`, `override_reason`
+                )
+                SELECT plan.`profile_id`, profile.`service_instance_id`, plan.`slot_id`,
+                    plan.`portion_title`, plan.`locator`, plan.`passage_range`,
+                    plan.`assignee_name`, plan.`backup_assignee_name`,
+                    plan.`preparation_status`, plan.`manual_override`, plan.`override_reason`
+                FROM `experience_reading_plan` plan
+                JOIN `experience_profile` profile ON profile.`profile_id` = plan.`profile_id`
+                WHERE profile.`service_instance_id` IS NOT NULL
+                """.trimIndent(),
+            )
+            connection.execSQL("DROP TABLE `experience_reading_plan`")
+            connection.execSQL(
+                "ALTER TABLE `experience_reading_plan_new` RENAME TO `experience_reading_plan`",
+            )
+
+            connection.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `experience_service_record_marker` (
+                    `profile_id` INTEGER NOT NULL,
+                    `service_instance_id` TEXT NOT NULL,
+                    `record_type` TEXT NOT NULL,
+                    `record_id` TEXT NOT NULL,
+                    PRIMARY KEY(
+                        `profile_id`, `service_instance_id`, `record_type`, `record_id`
+                    ),
+                    FOREIGN KEY(`profile_id`, `service_instance_id`)
+                        REFERENCES `experience_service_instance`(`profile_id`, `service_instance_id`)
+                        ON UPDATE NO ACTION ON DELETE CASCADE
+                )
+                """.trimIndent(),
+            )
+            connection.execSQL(
+                """
+                INSERT INTO `experience_service_record_marker` (
+                    `profile_id`, `service_instance_id`, `record_type`, `record_id`
+                )
+                SELECT marker.`profile_id`, profile.`service_instance_id`,
+                    marker.`record_type`, marker.`record_id`
+                FROM `experience_record_marker` marker
+                JOIN `experience_profile` profile ON profile.`profile_id` = marker.`profile_id`
+                WHERE profile.`service_instance_id` IS NOT NULL
+                    AND marker.`record_type` IN (
+                        'completed_practice_step',
+                        'completed_preflight_step',
+                        'completed_service_segment'
+                    )
+                """.trimIndent(),
+            )
+            connection.execSQL(
+                """
+                DELETE FROM `experience_record_marker`
+                WHERE `record_type` IN (
+                    'completed_practice_step',
+                    'completed_preflight_step',
+                    'completed_service_segment'
+                )
+                """.trimIndent(),
+            )
+        }
+    }
+
+    private val MIGRATION_4_5 = object : Migration(4, 5) {
+        override fun migrate(connection: androidx.sqlite.SQLiteConnection) {
+            connection.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `workspace_snapshot_state` (
+                    `singleton_id` INTEGER NOT NULL,
+                    `persistence_schema_version` INTEGER NOT NULL,
+                    `fixture_id` TEXT NOT NULL,
+                    `primary_payload` TEXT,
+                    `backup_payload` TEXT,
+                    `legacy_command_payload` TEXT,
+                    PRIMARY KEY(`singleton_id`)
+                )
+                """.trimIndent(),
+            )
+        }
+    }
 }
 
-internal const val OPERATIONAL_DATABASE_VERSION = 1
+internal const val OPERATIONAL_DATABASE_VERSION = 5
 internal const val OPERATIONAL_DATABASE_NAME = "aseh-operational.db"

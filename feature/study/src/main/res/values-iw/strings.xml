@@ -3,4 +3,5 @@
     <string name="feature_study_title">&#x2066;EN · Study&#x2069;</string>
     <string name="feature_study_placeholder">&#x2066;EN · Placeholder only.&#x2069;</string>
     <string name="feature_study_mixed_script_fixture">אבג · &#x2068;ABC&#x2069; · 123</string>
+    <string name="feature_study_english_fallback_notice">&#x2066;EN · Study is currently shown in English while the Hebrew interface is incomplete.&#x2069;</string>
 </resources>

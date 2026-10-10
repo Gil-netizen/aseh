@@ -1,0 +1,19 @@
+# Selected metadata from Hebcal calendar API responses retrieved 2026-10-07.
+# See HEBCAL_CALENDAR_GOLDEN_PROVENANCE.md. No prayer or Torah-reading text is retained.
+id	date	region	hebrewYear	hebrewMonth	hebrewDay	serviceDayKind	workRestricted	fastDay	roshHodesh	specialShabbat	hebcalObservanceIds	knownKosherJavaOnlyObservanceIds
+special-shabbat-leap	2024-03-09	DIASPORA	5784	ADAR_I	29	SHABBAT	false	false	false	SHKALIM	shabbat-shekalim	NONE
+rosh-hodesh-adar-i	2024-03-10	DIASPORA	5784	ADAR_I	30	WEEKDAY	false	false	true	NONE	rosh-hodesh	NONE
+rosh-hodesh-adar-ii	2024-03-11	DIASPORA	5784	ADAR_II	1	WEEKDAY	false	false	true	NONE	rosh-hodesh	NONE
+shifted-fast-esther	2024-03-21	DIASPORA	5784	ADAR_II	11	WEEKDAY	false	true	false	NONE	fast-esther	NONE
+erev-pesach-firstborn	2024-04-22	DIASPORA	5784	NISAN	14	WEEKDAY	false	true	false	NONE	erev-pesach;fast-firstborn	NONE
+pesach-first-day	2024-04-23	DIASPORA	5784	NISAN	15	FESTIVAL	true	false	false	NONE	pesach	NONE
+pesach-second-day-diaspora	2024-04-24	DIASPORA	5784	NISAN	16	FESTIVAL	true	false	false	NONE	pesach	NONE
+pesach-second-day-israel	2024-04-24	ISRAEL	5784	NISAN	16	WEEKDAY	false	false	false	NONE	hol-hamoed-pesach	NONE
+shabbat-hol-hamoed	2024-04-27	ISRAEL	5784	NISAN	19	SHABBAT	false	false	false	NONE	hol-hamoed-pesach	NONE
+pesach-eighth-day-diaspora	2024-04-30	DIASPORA	5784	NISAN	22	FESTIVAL	true	false	false	NONE	pesach	NONE
+post-pesach-israel	2024-04-30	ISRAEL	5784	NISAN	22	WEEKDAY	false	false	false	NONE	NONE	isru-hag
+shavuot-second-day-diaspora	2024-06-13	DIASPORA	5784	SIVAN	7	FESTIVAL	true	false	false	NONE	shavuot	NONE
+post-shavuot-israel	2024-06-13	ISRAEL	5784	SIVAN	7	WEEKDAY	false	false	false	NONE	NONE	isru-hag
+simchat-torah-diaspora	2024-10-25	DIASPORA	5785	TISHREI	23	FESTIVAL	true	false	false	NONE	simchat-torah	NONE
+post-sukkot-israel	2024-10-25	ISRAEL	5785	TISHREI	23	WEEKDAY	false	false	false	NONE	NONE	isru-hag
+nonleap-adar-rosh-hodesh-special	2025-03-01	DIASPORA	5785	ADAR	1	SHABBAT	false	false	true	SHKALIM	rosh-hodesh;shabbat-shekalim	NONE

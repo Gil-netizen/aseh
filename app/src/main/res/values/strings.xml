@@ -2,9 +2,26 @@
 <resources>
   <string name="app_name" translatable="false">ASEH</string>
   <string name="app_place_context_missing_title">No place set</string>
-  <string name="app_place_context_missing_summary">Use this device’s location to calculate Jewish dates and solar times offline.</string>
+  <string name="app_place_context_missing_summary">Tap to use device GPS</string>
   <string name="app_place_context_active_title">Active place</string>
   <string name="app_place_context_device_label">Saved device location</string>
   <string name="app_place_context_setup">Set up place</string>
   <string name="app_place_context_change">Change place</string>
+  <string name="app_global_context_value">Context · %1$s</string>
+  <string name="app_global_search">Search</string>
+  <string name="app_context_dialog_title">Change context</string>
+  <string name="app_context_dialog_detail">Choose which local workspace ASEH should use across Now, Practice, Pray, Study, and Build.</string>
+  <string name="app_context_self">Self</string>
+  <string name="app_context_household">Household</string>
+  <string name="app_context_qahal">Qahal</string>
+  <string name="app_search_label">Search ASEH</string>
+  <string name="app_search_supporting">Searches locally; no network request is made.</string>
+  <string name="app_search_prompt">Search your responsibilities, calendar, decisions, inventory, practices, services, and sources.</string>
+  <string name="app_search_empty">No local result matches every search word.</string>
+  <string name="app_search_english_fallback">&#x2068;%1$s&#x2069;</string>
+  <string name="app_close">Close</string>
+  <string name="workspace_mode_operations_title">Workspace operations</string>
+  <string name="workspace_mode_service_title">Service rehearsal setup</string>
+  <string name="workspace_mode_operations_action">Workspace work</string>
+  <string name="workspace_mode_service_action">Service setup</string>
 </resources>

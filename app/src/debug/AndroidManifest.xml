@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+  xmlns:tools="http://schemas.android.com/tools">
+
+  <application>
+    <!--
+      Compose adds these activities to debug builds for IDE previews and
+      createComposeRule(). They must remain available to this app's signed
+      instrumentation package, but neither is an app entry point.
+    -->
+    <activity
+      android:name="androidx.compose.ui.tooling.PreviewActivity"
+      android:exported="false"
+      tools:replace="android:exported" />
+    <activity
+      android:name="androidx.activity.ComponentActivity"
+      android:exported="false"
+      tools:replace="android:exported" />
+  </application>
+</manifest>

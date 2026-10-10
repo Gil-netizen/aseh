@@ -164,7 +164,7 @@ class NowScreenTest {
 
     composeRule.onNodeWithTag("now-set-up-place")
       .assertIsDisplayed()
-      .assertTextContains("Set up place")
+      .assertTextContains("Use my location")
   }
 
   @Test

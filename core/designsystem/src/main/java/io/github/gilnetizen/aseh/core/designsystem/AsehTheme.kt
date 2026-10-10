@@ -47,6 +47,72 @@ private val DarkColors = darkColorScheme(
     onError = Color(0xFF690005),
 )
 
+private val HighContrastLightColors = lightColorScheme(
+    primary = Color(0xFF00381D),
+    onPrimary = Color.White,
+    primaryContainer = Color(0xFFC8FAD5),
+    onPrimaryContainer = Color.Black,
+    secondary = Color(0xFF243D2B),
+    onSecondary = Color.White,
+    secondaryContainer = Color(0xFFE2F5E5),
+    onSecondaryContainer = Color.Black,
+    background = Color.White,
+    onBackground = Color.Black,
+    surface = Color.White,
+    onSurface = Color.Black,
+    surfaceVariant = Color(0xFFF0F2EF),
+    onSurfaceVariant = Color.Black,
+    outline = Color.Black,
+    error = Color(0xFF8C0009),
+    onError = Color.White,
+    errorContainer = Color(0xFFFFDAD7),
+    onErrorContainer = Color(0xFF310001),
+)
+
+private val HighContrastDarkColors = darkColorScheme(
+    primary = Color(0xFFB5F7C8),
+    onPrimary = Color.Black,
+    primaryContainer = Color(0xFF0A4E2A),
+    onPrimaryContainer = Color.White,
+    secondary = Color(0xFFD9F4DD),
+    onSecondary = Color.Black,
+    secondaryContainer = Color(0xFF253E2B),
+    onSecondaryContainer = Color.White,
+    background = Color.Black,
+    onBackground = Color.White,
+    surface = Color.Black,
+    onSurface = Color.White,
+    surfaceVariant = Color(0xFF1D211E),
+    onSurfaceVariant = Color.White,
+    outline = Color.White,
+    error = Color(0xFFFFB4AB),
+    onError = Color.Black,
+    errorContainer = Color(0xFF7F0007),
+    onErrorContainer = Color.White,
+)
+
+private val LowLightColors = darkColorScheme(
+    primary = Color(0xFFFFD18A),
+    onPrimary = Color(0xFF2A1700),
+    primaryContainer = Color(0xFF4A2D00),
+    onPrimaryContainer = Color(0xFFFFE2B8),
+    secondary = Color(0xFFE3C9A5),
+    onSecondary = Color(0xFF291D0D),
+    secondaryContainer = Color(0xFF3F3020),
+    onSecondaryContainer = Color(0xFFFBE0BB),
+    background = Color(0xFF080604),
+    onBackground = Color(0xFFE8DCCB),
+    surface = Color(0xFF080604),
+    onSurface = Color(0xFFE8DCCB),
+    surfaceVariant = Color(0xFF2A241D),
+    onSurfaceVariant = Color(0xFFD7C7B3),
+    outline = Color(0xFF9F8F7C),
+    error = Color(0xFFFFB4AB),
+    onError = Color(0xFF690005),
+    errorContainer = Color(0xFF3E0908),
+    onErrorContainer = Color(0xFFFFDAD6),
+)
+
 /**
  * The shared ASEH Material theme seed.
  *
@@ -56,10 +122,18 @@ private val DarkColors = darkColorScheme(
 @Composable
 fun AsehTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
+    highContrast: Boolean = false,
+    lowLight: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     MaterialTheme(
-        colorScheme = if (darkTheme) DarkColors else LightColors,
+        colorScheme = when {
+            highContrast && darkTheme -> HighContrastDarkColors
+            highContrast -> HighContrastLightColors
+            lowLight -> LowLightColors
+            darkTheme -> DarkColors
+            else -> LightColors
+        },
         content = content,
     )
 }

@@ -1,0 +1,54 @@
+{
+  "edition_id": "wikisource_yemenite_baladi_weekday_research_20261010",
+  "work": "Siddur, Yemenite Baladi rite, weekday services",
+  "language": "he",
+  "script": "Hebrew",
+  "provider": "Hebrew Wikisource",
+  "edition_title": "Siddur/Nusach Yemen Baladi, pinned page revisions",
+  "upstream_license": "CC BY-SA 4.0",
+  "license_url": "https://creativecommons.org/licenses/by-sa/4.0/",
+  "attribution": "Hebrew Wikisource contributors; see the history for each pinned page revision",
+  "retrieved_at": "2026-10-10",
+  "distribution_status": "development-research-only",
+  "editorial_status": "drafted; pages are collaborative, unreviewed composites and not an exact historical edition",
+  "relationship_to_rambam": "Baladi completion witness used where the pinned Rambam Order of Prayer abbreviates familiar text. It is not labeled as a canonical or pure Nusach HaRambam edition.",
+  "normalization": [
+    "Save the exact UTF-8 wikitext returned for each pinned revision",
+    "Capture MediaWiki rendered output so transcluded templates are resolved",
+    "Remove edit controls, superscript reference markers, scripts, styles, and no-print elements",
+    "Collapse horizontal whitespace and preserve visible block order with blank lines",
+    "Apply Unicode NFKC to runtime text and remove display-only table separators",
+    "Select individual-prayer passages and omit communal Kaddish, repetition, and leader-only cues in the runtime service"
+  ],
+  "files": [
+    {
+      "service": "shacharit",
+      "revision": 3081633,
+      "source_url": "https://he.wikisource.org/w/index.php?title=%D7%A1%D7%99%D7%93%D7%95%D7%A8/%D7%A0%D7%95%D7%A1%D7%97_%D7%AA%D7%99%D7%9E%D7%9F_%D7%91%D7%9C%D7%93%D7%99/%D7%A9%D7%97%D7%A8%D7%99%D7%AA_%D7%9C%D7%97%D7%95%D7%9C&oldid=3081633",
+      "wikitext_path": "shacharit.rev3081633.wikitext",
+      "wikitext_sha256": "a0e604e2b3f9759e52a1be7e2bae044fff1e059b827404dc67e2a4aa2d5f9ed3",
+      "rendered_snapshot_path": "shacharit.rev3081633.rendered.html",
+      "rendered_snapshot_sha256": "cf4f03985e7fc2a04d2d19b38d563daafbfc4fb680ea9348a0a76f40f72fd2a3",
+      "display_path": "shacharit.rev3081633.display.txt",
+      "display_sha256": "2f94285a0fa3bdfe2d3ec32e2904f42bb8fc89b5aa55f5c5a8ac07ca1809616d"
+    },
+    {
+      "service": "mincha",
+      "revision": 1076941,
+      "source_url": "https://he.wikisource.org/w/index.php?title=%D7%A1%D7%99%D7%93%D7%95%D7%A8/%D7%A0%D7%95%D7%A1%D7%97_%D7%AA%D7%99%D7%9E%D7%9F_%D7%91%D7%9C%D7%93%D7%99/%D7%9E%D7%A0%D7%97%D7%94_%D7%9C%D7%97%D7%95%D7%9C&oldid=1076941",
+      "wikitext_path": "mincha.rev1076941.wikitext",
+      "wikitext_sha256": "3c3c5dae275c1369434e05e05cd3538195089c7c1225f64f01131da28b464c2e",
+      "display_path": "mincha.rev1076941.display.txt",
+      "display_sha256": "5d90d46c1dcbca7d2f68b52c0efde6bb05a9738856a1bcbf52ba3b1d92f7eb0f"
+    },
+    {
+      "service": "arvit",
+      "revision": 2947373,
+      "source_url": "https://he.wikisource.org/w/index.php?title=%D7%A1%D7%99%D7%93%D7%95%D7%A8/%D7%A0%D7%95%D7%A1%D7%97_%D7%AA%D7%99%D7%9E%D7%9F_%D7%91%D7%9C%D7%93%D7%99/%D7%A2%D7%A8%D7%91%D7%99%D7%AA_%D7%9C%D7%97%D7%95%D7%9C&oldid=2947373",
+      "wikitext_path": "arvit.rev2947373.wikitext",
+      "wikitext_sha256": "669419675c49680cc1860d676d5928dd731b7adde5826a308511963bcf6f23e6",
+      "display_path": "arvit.rev2947373.display.txt",
+      "display_sha256": "4827c463bcc1e8fc04e6a5931fbf47871ca36fad74fa93a90c13744d5f168359"
+    }
+  ]
+}

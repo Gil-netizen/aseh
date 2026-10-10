@@ -1,0 +1,39 @@
+{
+  "edition_id": "tanakh_he_miqra_masorah_shema_20261008",
+  "work": "Tanakh",
+  "language": "he",
+  "script": "Hebrew",
+  "provider": "Sefaria API v3",
+  "version_title": "Miqra according to the Masorah",
+  "exact_selector": "hebrew|Miqra according to the Masorah",
+  "fill_in_missing_segments": false,
+  "returned_license": "CC-BY-SA",
+  "upstream_license": "CC BY-SA 4.0",
+  "license_url": "https://creativecommons.org/licenses/by-sa/4.0/",
+  "attribution": "Miqra according to the Masorah contributors via Hebrew Wikisource and Sefaria",
+  "retrieved_at": "2026-10-08",
+  "distribution_status": "development-research-only",
+  "normalization": [
+    "remove HTML presentation tags",
+    "decode HTML entities",
+    "remove page-only documentation annotations and non-breaking layout spacing",
+    "remove cantillation marks for the reader while retaining Hebrew letters, vocalization, and verse punctuation"
+  ],
+  "files": [
+    {
+      "path": "deuteronomy-6-4-9.json",
+      "range": "Deuteronomy 6:4-9",
+      "sha256": "78532de0b1aaf01ddafb96eb67e1db30dc46e6f2710354704a612363b32c01dd"
+    },
+    {
+      "path": "deuteronomy-11-13-21.json",
+      "range": "Deuteronomy 11:13-21",
+      "sha256": "a95db8337765f8d64f4213ba1b401b6f5a88c8beb4cde2ec84f8cc8decfb569d"
+    },
+    {
+      "path": "numbers-15-37-41.json",
+      "range": "Numbers 15:37-41",
+      "sha256": "cceef57078d8ba0182f3c2382ed6422b85821ada7ecf7f1b05cdf99d49292e97"
+    }
+  ]
+}

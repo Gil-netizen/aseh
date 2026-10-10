@@ -1,5 +1,6 @@
 package io.github.gilnetizen.aseh
 
+import android.Manifest
 import android.content.Intent
 import android.graphics.Bitmap
 import androidx.appcompat.app.AppCompatDelegate
@@ -11,16 +12,20 @@ import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.v2.AndroidComposeTestRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.core.os.LocaleListCompat
@@ -29,10 +34,15 @@ import androidx.test.ext.junit.rules.ActivityScenarioRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.platform.io.PlatformTestStorageRegistry
+import androidx.test.rule.GrantPermissionRule
 import io.github.gilnetizen.aseh.core.database.ManualPlaceContext
+import io.github.gilnetizen.aseh.core.model.CalendarRegion
+import io.github.gilnetizen.aseh.core.model.WorkspaceKind
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -53,7 +63,11 @@ class AsehNavigationTest {
     },
   )
 
-  @get:Rule
+  @get:Rule(order = 0)
+  val locationPermissionRule: GrantPermissionRule =
+    GrantPermissionRule.grant(Manifest.permission.ACCESS_COARSE_LOCATION)
+
+  @get:Rule(order = 1)
   val composeRule = AndroidComposeTestRule(activityRule) { rule ->
     lateinit var activity: MainActivity
     rule.scenario.onActivity { activity = it }
@@ -64,12 +78,14 @@ class AsehNavigationTest {
   fun resetAppState() {
     runBlocking {
       withTimeout(5_000) {
-        preferencesRepository().setSelectedDestinationId("now")
         manualPlaceContextRepository().clear()
-        preferencesRepository().preferences.first { it.selectedDestinationId == "now" }
+        experienceStateRepository().setWorkspace("", WorkspaceKind.QAHAL)
+        experienceStateRepository().setSelectedServicePlan(null)
+        workspaceReviewStateRepository()?.clear()
         manualPlaceContextRepository().context.first { it == null }
       }
     }
+    synchronizeSelectedDestination("now")
     waitUntilSelected("now")
     waitUntilManualPlaceCleared()
   }
@@ -80,6 +96,7 @@ class AsehNavigationTest {
       runBlocking {
         withTimeout(5_000) {
           manualPlaceContextRepository().clear()
+          workspaceReviewStateRepository()?.clear()
           manualPlaceContextRepository().context.first { it == null }
         }
       }
@@ -133,13 +150,10 @@ class AsehNavigationTest {
   @Test
   fun selectedDestinationSurvivesActivityRecreation() {
     composeRule.onNodeWithTag("destination-study").performClick()
-    composeRule.activityRule.scenario.recreate()
+    waitUntilSelected("study")
+    waitUntilPersistedDestination("study")
 
-    runBlocking {
-      withTimeout(5_000) {
-        preferencesRepository().preferences.first { it.selectedDestinationId == "study" }
-      }
-    }
+    composeRule.activityRule.scenario.recreate()
     waitUntilSelected("study")
   }
 
@@ -148,14 +162,235 @@ class AsehNavigationTest {
     listOf("practice", "prayer", "study", "build").forEach { destinationId ->
       composeRule.onNodeWithTag("destination-$destinationId").performClick()
     }
+    waitUntilSelected("build")
+    waitUntilPersistedDestination("build")
+
     composeRule.activityRule.scenario.recreate()
+    waitUntilSelected("build")
+  }
+
+  @Test
+  fun globalSearchAndContextSwitchWorkFromEveryDestination() {
+    setApplicationLanguage("en")
+
+    composeRule.onNodeWithTag("app-global-search")
+      .assertIsDisplayed()
+      .performClick()
+    composeRule.onNodeWithTag("app-global-search-input")
+      .performTextInput("accessible path")
+    composeRule.onNodeWithTag("app-global-search-result-practice.rehearsal.access")
+      .assertIsDisplayed()
+      .performClick()
+    waitUntilSelected("practice")
+    composeRule.onNodeWithTag("practice-detail").assertIsDisplayed()
+    composeRule.onNodeWithText("Prepare an accessible path", substring = true)
+      .assertIsDisplayed()
+
+    composeRule.onNodeWithTag("app-global-context")
+      .assertIsDisplayed()
+      .performClick()
+    composeRule.onNodeWithTag("app-context-household")
+      .performClick()
 
     runBlocking {
       withTimeout(5_000) {
-        preferencesRepository().preferences.first { it.selectedDestinationId == "build" }
+        experienceStateRepository().state.first { it.workspaceKind == WorkspaceKind.HOUSEHOLD }
       }
     }
+    composeRule.onNodeWithTag("app-global-context")
+      .assertTextContains("Household", substring = true)
+
+    composeRule.onNodeWithTag("app-global-search").performClick()
+    composeRule.onNodeWithTag("app-global-search-input")
+      .performTextInput("shared-table preparation")
+    composeRule.onNodeWithTag(
+      "app-global-search-result-household:dev.household.synthetic:" +
+        "responsibility:dev.household.responsibility.table",
+    )
+      .assertIsDisplayed()
+      .performClick()
     waitUntilSelected("build")
+    composeRule.onNodeWithTag("workspace-dashboard").assertIsDisplayed()
+    composeRule.waitUntil(timeoutMillis = 5_000) {
+      runCatching {
+        composeRule.onNodeWithTag("workspace-record-dev.household.responsibility.table")
+          .assertIsFocused()
+      }.isSuccess
+    }
+
+    composeRule.onNodeWithTag("app-global-search").performClick()
+    composeRule.onNodeWithTag("app-global-search-input")
+      .performTextInput("Synthetic household workspace")
+    composeRule.onNodeWithTag("app-global-search-result-household:dev.household.synthetic")
+      .assertIsDisplayed()
+      .performClick()
+    composeRule.waitUntil(timeoutMillis = 5_000) {
+      composeRule.onAllNodesWithTag("workspace-heading").fetchSemanticsNodes().isNotEmpty()
+    }
+    composeRule.waitForIdle()
+    composeRule.onNodeWithTag("workspace-heading").assertIsFocused()
+  }
+
+  @Test
+  fun functionalReviewCardOpensTheInteractiveProductFlows() {
+    setApplicationLanguage("en")
+
+    composeRule.onNodeWithTag("now-functional-review")
+      .performScrollTo()
+      .assertIsDisplayed()
+    composeRule.onNodeWithTag("now-functional-open-prayer")
+      .performScrollTo()
+      .assertHasClickAction()
+      .performClick()
+    waitUntilSelected("prayer")
+    composeRule.onNodeWithTag("prayer-screen").assertIsDisplayed()
+
+    pressSystemBack()
+    waitUntilSelected("now")
+    composeRule.onNodeWithTag("now-functional-open-practice")
+      .performScrollTo()
+      .assertHasClickAction()
+      .performClick()
+    waitUntilSelected("practice")
+    composeRule.onNodeWithTag("practice-catalog").assertIsDisplayed()
+
+    pressSystemBack()
+    waitUntilSelected("now")
+    composeRule.onNodeWithTag("now-functional-open-build")
+      .performScrollTo()
+      .assertHasClickAction()
+      .performClick()
+    waitUntilSelected("build")
+    composeRule.onNodeWithTag("build-heading").assertIsDisplayed()
+  }
+
+  @Test
+  fun workspaceContextsAreDistinctAndLifecycleChangesSurviveRecreation() {
+    setApplicationLanguage("en")
+
+    composeRule.onNodeWithTag("destination-build").performClick()
+    composeRule.onNodeWithTag("workspace-dashboard").assertIsDisplayed()
+    composeRule.onNodeWithTag("workspace-due-dev.qahal.inventory.chairs")
+      .performScrollTo().assertIsDisplayed()
+
+    composeRule.onNodeWithTag("app-global-context").performClick()
+    composeRule.onNodeWithTag("app-context-household").performClick()
+    runBlocking {
+      withTimeout(5_000) {
+        experienceStateRepository().state.first { it.workspaceKind == WorkspaceKind.HOUSEHOLD }
+      }
+    }
+    composeRule.onNodeWithTag("workspace-due-dev.household.responsibility.table")
+      .performScrollTo().assertIsDisplayed()
+    val completeResponsibilityTag =
+      "workspace-action-mark_done-dev.household.responsibility.table"
+    composeRule.onNodeWithTag("workspace-dashboard")
+      .performScrollToNode(hasTestTag(completeResponsibilityTag))
+    composeRule.onNodeWithTag(completeResponsibilityTag).performClick()
+    composeRule.waitUntil(timeoutMillis = 5_000) {
+      composeRule.onAllNodesWithTag(
+        "workspace-action-reopen-dev.household.responsibility.table",
+      ).fetchSemanticsNodes().isNotEmpty()
+    }
+    val reopenResponsibilityTag =
+      "workspace-action-reopen-dev.household.responsibility.table"
+    composeRule.onNodeWithTag(reopenResponsibilityTag).assertIsDisplayed()
+
+    composeRule.activityRule.scenario.recreate()
+    waitUntilSelected("build")
+    composeRule.onNodeWithTag("workspace-dashboard")
+      .performScrollToNode(hasTestTag(reopenResponsibilityTag))
+    composeRule.onNodeWithTag(reopenResponsibilityTag).assertIsDisplayed()
+
+    composeRule.onNodeWithTag("app-global-context").performClick()
+    composeRule.onNodeWithTag("app-context-self").performClick()
+    runBlocking {
+      withTimeout(5_000) {
+        experienceStateRepository().state.first { it.workspaceKind == WorkspaceKind.SELF }
+      }
+    }
+    composeRule.onNodeWithTag("workspace-due-dev.self.practice.preparation")
+      .performScrollTo().assertIsDisplayed()
+  }
+
+  @Test
+  fun systemBackUnwindsNestedViewsBeforeReturningToNow() {
+    setApplicationLanguage("en")
+
+    composeRule.onNodeWithTag("destination-practice").performClick()
+    composeRule.onNodeWithTag("practice-catalog")
+      .performScrollToNode(hasTestTag("practice-card-practice.rehearsal.team"))
+    composeRule.onNodeWithTag("practice-card-practice.rehearsal.team")
+      .performClick()
+    composeRule.onNodeWithTag("practice-detail").assertIsDisplayed()
+    pressSystemBack()
+    composeRule.onNodeWithTag("practice-catalog").assertIsDisplayed()
+
+    pressSystemBack()
+    waitUntilSelected("now")
+
+    composeRule.onNodeWithTag("destination-study").performClick()
+    composeRule.onNodeWithTag("study-source-source.demo.role-readiness")
+      .performScrollTo()
+      .performClick()
+    composeRule.onNodeWithTag("study-source-heading").assertIsDisplayed()
+    pressSystemBack()
+    composeRule.onNodeWithTag("study-heading").assertIsDisplayed()
+
+    pressSystemBack()
+    waitUntilSelected("now")
+
+    runBlocking {
+      manualPlaceContextRepository().save(
+        ManualPlaceContext(
+          label = "Navigation test place",
+          latitudeDegrees = 31.778,
+          longitudeDegrees = 35.235,
+          elevationMeters = null,
+          timeZoneId = "Asia/Jerusalem",
+        ),
+      )
+      manualPlaceContextRepository().context.first { it != null }
+      experienceStateRepository().setCalendarRegion(CalendarRegion.ISRAEL)
+    }
+    composeRule.waitUntil(timeoutMillis = 5_000) {
+      runBlocking(Dispatchers.IO) {
+        withTimeoutOrNull(250) {
+          experienceStateRepository().state.first { state -> state.serviceInstanceKey != null }
+          true
+        } == true
+      }
+    }
+
+    composeRule.onNodeWithTag("destination-prayer").performClick()
+    composeRule.onNodeWithTag("prayer-screen")
+      .performScrollToNode(hasTestTag("prayer-preview-with-blockers"))
+    composeRule.onNodeWithTag("prayer-preview-with-blockers")
+      .performClick()
+    composeRule.onNodeWithTag("prayer-focused-conductor").assertIsDisplayed()
+    pressSystemBack()
+    composeRule.onNodeWithTag("prayer-screen").assertIsDisplayed()
+
+    pressSystemBack()
+    waitUntilSelected("now")
+
+    composeRule.onNodeWithTag("destination-build").performClick()
+    composeRule.onNodeWithTag("workspace-dashboard").assertIsDisplayed()
+    composeRule.onNodeWithTag("workspace-edit-name").performClick()
+    composeRule.onNodeWithTag("workspace-editor-name").assertIsDisplayed()
+    pressSystemBack()
+    composeRule.onNodeWithTag("workspace-dashboard").assertIsDisplayed()
+    composeRule.onAllNodesWithTag("workspace-editor-name").assertCountEquals(0)
+
+    composeRule.onNodeWithTag("workspace-edit-name").performClick()
+    composeRule.onNodeWithTag("workspace-editor-name").assertIsDisplayed()
+    composeRule.onNodeWithTag("workspace-open-service-setup").performClick()
+    composeRule.onNodeWithTag("build-heading").assertIsDisplayed()
+    pressSystemBack()
+    composeRule.onNodeWithTag("workspace-dashboard").assertIsDisplayed()
+
+    pressSystemBack()
+    waitUntilSelected("now")
   }
 
   @Test
@@ -166,15 +401,17 @@ class AsehNavigationTest {
     waitUntilSelected("study")
 
     composeRule.onNodeWithTag("app-place-context-bar").assertIsDisplayed()
-    composeRule.onNodeWithTag("app-place-context-status")
+    composeRule.onNodeWithTag("app-place-context-status", useUnmergedTree = true)
       .assertIsDisplayed()
       .assertTextContains("No place set", substring = true)
-    composeRule.onNodeWithTag("app-place-context-action")
+    composeRule.onNodeWithTag("app-place-context-action", useUnmergedTree = true)
       .assertIsDisplayed()
-      .assertHasClickAction()
-      .assertTextContains("Set up place", substring = true)
       .assertWidthIsAtLeast(48.dp)
       .assertHeightIsAtLeast(48.dp)
+    composeRule.onNodeWithText("Set up place", useUnmergedTree = true)
+      .assertIsDisplayed()
+    composeRule.onNodeWithTag("app-place-context-bar")
+      .assertHasClickAction()
       .performClick()
 
     waitUntilSelected("now")
@@ -186,6 +423,7 @@ class AsehNavigationTest {
     setApplicationLanguage("en")
 
     composeRule.onNodeWithTag("now-set-up-place")
+      .performScrollTo()
       .assertIsDisplayed()
       .performClick()
     openManualPlaceEditor()
@@ -224,6 +462,7 @@ class AsehNavigationTest {
     setApplicationLanguage("en")
 
     composeRule.onNodeWithTag("now-set-up-place")
+      .performScrollTo()
       .assertIsDisplayed()
       .performClick()
     openManualPlaceEditor()
@@ -243,6 +482,7 @@ class AsehNavigationTest {
     setApplicationLanguage("he")
 
     composeRule.onNodeWithTag("now-set-up-place")
+      .performScrollTo()
       .assertIsDisplayed()
       .performClick()
     openManualPlaceEditor()
@@ -297,6 +537,12 @@ class AsehNavigationTest {
   private fun manualPlaceContextRepository() =
     appGraph().manualPlaceContextRepository
 
+  private fun experienceStateRepository() =
+    appGraph().experienceStateRepository
+
+  private fun workspaceReviewStateRepository() =
+    appGraph().workspaceReviewStateRepository
+
   private fun appGraph() =
     (InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as AsehApplication)
       .appGraph
@@ -306,6 +552,29 @@ class AsehNavigationTest {
       runCatching {
         composeRule.onNodeWithTag("destination-$destinationId").assertIsSelected()
       }.isSuccess
+    }
+  }
+
+  private fun synchronizeSelectedDestination(destinationId: String) {
+    appGraph().setSelectedDestinationId(TEST_NAVIGATION_BARRIER_ID)
+    waitUntilPersistedDestination(TEST_NAVIGATION_BARRIER_ID)
+    appGraph().setSelectedDestinationId(destinationId)
+    waitUntilPersistedDestination(destinationId)
+  }
+
+  private fun waitUntilPersistedDestination(destinationId: String) {
+    composeRule.waitUntil(timeoutMillis = 5_000) {
+      runBlocking(Dispatchers.IO) {
+        withTimeoutOrNull(250) {
+          preferencesRepository().preferences.first().selectedDestinationId == destinationId
+        } == true
+      }
+    }
+  }
+
+  private fun pressSystemBack() {
+    composeRule.runOnIdle {
+      composeRule.activity.onBackPressedDispatcher.onBackPressed()
     }
   }
 
@@ -436,20 +705,28 @@ class AsehNavigationTest {
       "now-time-zone",
       "now-refresh",
     )
-    listOf(
-      "now-heading",
-      "now-summary",
-      "now-location-status",
-      "now-set-up-place",
-    ).forEach { tag ->
+    listOf("now-heading", "now-summary").forEach { tag ->
       composeRule.onNodeWithTag(tag).assertIsDisplayed()
     }
+    composeRule.onNodeWithTag("now-location-status")
+      .performScrollTo()
+      .assertIsDisplayed()
+    composeRule.onNodeWithTag("now-set-up-place")
+      .performScrollTo()
+      .assertIsDisplayed()
 
     val headings = composeRule.onAllNodes(
       matcher = SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading),
       useUnmergedTree = true,
     ).fetchSemanticsNodes()
-    assertEquals("Now must expose exactly one semantic heading", 1, headings.size)
+    val screenHeadingId = composeRule.onNodeWithTag(
+      testTag = "now-heading",
+      useUnmergedTree = true,
+    ).fetchSemanticsNode().id
+    assertTrue(
+      "Now must expose its screen title as a semantic heading",
+      headings.any { it.id == screenHeadingId },
+    )
 
     val targetNodeIds = orderedTags.associateWith { tag ->
       composeRule.onNodeWithTag(tag).fetchSemanticsNode().id
@@ -480,9 +757,10 @@ class AsehNavigationTest {
     composeRule.onNodeWithTag("now-location-status")
       .assertTextContains("${fallbackPrefix}Location", substring = true)
     composeRule.onNodeWithTag("now-set-up-place")
+      .performScrollTo()
       .assertIsDisplayed()
       .assertHasClickAction()
-      .assertTextContains("${fallbackPrefix}Set up place", substring = true)
+      .assertTextContains("${fallbackPrefix}Use my location", substring = true)
       .assertWidthIsAtLeast(48.dp)
       .assertHeightIsAtLeast(48.dp)
 
@@ -513,6 +791,7 @@ class AsehNavigationTest {
   }
 
   private companion object {
+    const val TEST_NAVIGATION_BARRIER_ID = "test_sync"
     val destinationIds = listOf("now", "practice", "prayer", "study", "build")
 
     val syntheticManualPlace = ManualPlaceContext(

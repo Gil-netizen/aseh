@@ -1,0 +1,41 @@
+{
+  "edition_id": "rambam_order_prayer_he_wikisource_research_20261008",
+  "work": "Mishneh Torah, The Order of Prayer",
+  "language": "he",
+  "script": "Hebrew",
+  "provider": "Hebrew Wikisource",
+  "edition_title": "Wikisource Mishneh Torah",
+  "upstream_license": "CC BY-SA 4.0",
+  "license_url": "https://creativecommons.org/licenses/by-sa/4.0/",
+  "attribution": "Hebrew Wikisource contributors; see each pinned revision history",
+  "retrieved_at": "2026-10-08",
+  "distribution_status": "development-research-only",
+  "editorial_status": "researched; source pages are explicitly not reviewed",
+  "normalization": [
+    "UTF-8 storage without BOM",
+    "runtime excerpts omit MediaWiki templates and section headings",
+    "runtime excerpts preserve source spelling, punctuation, and abbreviations",
+    "paragraphs are grouped into reader segments without silently filling lacunae"
+  ],
+  "files": [
+    {
+      "path": "order-of-prayer-1.rev2998697.wikitext",
+      "revision": 2998697,
+      "source_url": "https://he.wikisource.org/w/index.php?title=%D7%A8%D7%9E%D7%91%22%D7%9D_%D7%A1%D7%93%D7%A8_%D7%94%D7%AA%D7%A4%D7%99%D7%9C%D7%94_%D7%90&oldid=2998697",
+      "sha256": "2d5b9bc1ac76549e993d6820e021da46b38eb34416bd92dce1bc54be10d6d59e"
+    },
+    {
+      "path": "order-of-prayer-2.rev2870245.wikitext",
+      "revision": 2870245,
+      "source_url": "https://he.wikisource.org/w/index.php?title=%D7%A8%D7%9E%D7%91%22%D7%9D_%D7%A1%D7%93%D7%A8_%D7%94%D7%AA%D7%A4%D7%99%D7%9C%D7%94_%D7%91&oldid=2870245",
+      "sha256": "e636300af3bc3815346365c105ba9e34a7f15c292a4504f3b7253ee516413580"
+    },
+    {
+      "path": "order-of-prayer-3.rev2870237.wikitext",
+      "revision": 2870237,
+      "source_url": "https://he.wikisource.org/w/index.php?title=%D7%A8%D7%9E%D7%91%22%D7%9D_%D7%A1%D7%93%D7%A8_%D7%94%D7%AA%D7%A4%D7%99%D7%9C%D7%94_%D7%92&oldid=2870237",
+      "sha256": "6fb9733ec32e77f0e3a6cca34715de22e3dc772249360368861d2df6821d9f51"
+    }
+  ]
+}
+

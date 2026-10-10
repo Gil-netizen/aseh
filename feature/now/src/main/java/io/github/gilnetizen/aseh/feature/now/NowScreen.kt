@@ -4,6 +4,7 @@ import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -17,6 +18,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -42,6 +44,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.tooling.preview.Preview
@@ -50,6 +53,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import io.github.gilnetizen.aseh.domain.zmanim.ElevationHandling
+import io.github.gilnetizen.aseh.domain.servicecatalog.DatedServiceInstance
+import io.github.gilnetizen.aseh.domain.servicecatalog.ServiceAgenda
+import io.github.gilnetizen.aseh.domain.servicecatalog.ServiceAvailabilityStatus
+import io.github.gilnetizen.aseh.domain.servicecatalog.ServiceSelectionResult
 import io.github.gilnetizen.aseh.domain.zmanim.HebrewDateCalculation
 import io.github.gilnetizen.aseh.domain.zmanim.KosherJavaZmanimEngine
 import io.github.gilnetizen.aseh.domain.zmanim.ZmanCalculation
@@ -85,6 +92,9 @@ private val solarTimeFormatter: DateTimeFormatter =
 private val nextEventFormatter: DateTimeFormatter =
     DateTimeFormatter.ofPattern("EEE, MMM d · h:mm a", Locale.ENGLISH)
 
+private val serviceTimeFormatter: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("EEE, MMM d · h:mm a", Locale.ENGLISH)
+
 private val availableTimeZoneIds: List<String> by lazy {
     ZoneId.getAvailableZoneIds().sorted()
 }
@@ -95,6 +105,37 @@ internal data class NowUiState(
     val localTime: String,
     val timeZone: String,
 )
+
+data class NowJourneySummary(
+    val dateLabel: String,
+    val locationLabel: String,
+    val workspaceLabel: String,
+    val practiceCompleted: Int,
+    val practiceTotal: Int,
+    val serviceCompleted: Int,
+    val serviceTotal: Int,
+    val nextActionTitle: String = "Continue preparation",
+    val nextActionDetail: String = "Complete the next preparation item for this rehearsal.",
+    val nextAction: NowJourneyAction = NowJourneyAction.PRACTICE,
+)
+
+data class NowWorkspaceDueItem(
+    val label: String,
+    val dueLabel: String,
+    val timingLabel: String,
+)
+
+data class NowWorkspaceSummary(
+    val contextLabel: String,
+    val dueItems: List<NowWorkspaceDueItem>,
+)
+
+enum class NowJourneyAction {
+    LOCATION,
+    PRACTICE,
+    PRAYER,
+    BUILD,
+}
 
 /**
  * Creates the display state without consulting Android services or the network.
@@ -221,6 +262,15 @@ fun NowScreen(
     onOpenLocationSettings: () -> Unit = {},
     onSavePlaceContext: suspend (NowPlaceContext) -> Unit = {},
     onClearPlaceContext: suspend () -> Unit = {},
+    journeySummary: NowJourneySummary? = null,
+    workspaceSummary: NowWorkspaceSummary? = null,
+    serviceSelection: ServiceSelectionResult? = null,
+    showFunctionalReviewNotice: Boolean = false,
+    onOpenService: (String) -> Unit = {},
+    onOpenPractice: () -> Unit = {},
+    onOpenPrayer: () -> Unit = {},
+    onOpenBuild: () -> Unit = {},
+    onOpenWorkspace: () -> Unit = onOpenBuild,
     modifier: Modifier = Modifier,
 ) {
     val selectedTimeZoneId = placeContext?.timeZoneId
@@ -296,6 +346,12 @@ fun NowScreen(
             modifier = Modifier.testTag("now-summary"),
         )
 
+        if (showFunctionalReviewNotice && !editingPlace) {
+            FunctionalReviewCard(
+                onOpenPrayer = onOpenPrayer,
+            )
+        }
+
         if (editingPlace) {
             PlaceContextEditor(
                 existingContext = placeContext,
@@ -324,6 +380,30 @@ fun NowScreen(
                 placeContextReady = placeContextReady,
                 placeContext = null,
                 onChange = { editingPlace = true },
+            )
+        }
+
+        if (!editingPlace && journeySummary != null) {
+            JourneyCard(
+                summary = journeySummary,
+                onSetLocation = { editingPlace = true },
+                onOpenPractice = onOpenPractice,
+                onOpenPrayer = onOpenPrayer,
+                onOpenBuild = onOpenBuild,
+            )
+        }
+
+        if (!editingPlace && workspaceSummary != null) {
+            WorkspaceDueCard(
+                summary = workspaceSummary,
+                onOpenWorkspace = onOpenWorkspace,
+            )
+        }
+
+        if (!editingPlace && serviceSelection != null) {
+            ServiceAgendaCard(
+                selection = serviceSelection,
+                onOpenService = onOpenService,
             )
         }
 
@@ -379,6 +459,366 @@ fun NowScreen(
                 .testTag("now-refresh"),
         ) {
             Text(text = stringResource(R.string.feature_now_refresh))
+        }
+    }
+}
+
+@Composable
+private fun WorkspaceDueCard(
+    summary: NowWorkspaceSummary,
+    onOpenWorkspace: () -> Unit,
+) {
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("now-workspace-summary"),
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.feature_now_workspace_title, summary.contextLabel),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.semantics { heading() },
+            )
+            if (summary.dueItems.isEmpty()) {
+                Text(stringResource(R.string.feature_now_workspace_none_due))
+            } else {
+                Text(
+                    stringResource(
+                        R.string.feature_now_workspace_due_count,
+                        summary.dueItems.size,
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                summary.dueItems.take(3).forEach { item ->
+                    Text(
+                        text = stringResource(
+                            R.string.feature_now_workspace_due_item,
+                            item.timingLabel,
+                            item.dueLabel,
+                            item.label,
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
+            Button(
+                onClick = onOpenWorkspace,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .testTag("now-open-workspace"),
+            ) {
+                Text(stringResource(R.string.feature_now_workspace_open))
+            }
+        }
+    }
+}
+
+@Composable
+private fun FunctionalReviewCard(
+    onOpenPrayer: () -> Unit,
+) {
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("now-functional-review"),
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.feature_now_functional_review_title),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.semantics { heading() },
+            )
+            Text(
+                text = stringResource(R.string.feature_now_functional_review_body),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Button(
+                onClick = onOpenPrayer,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .testTag("now-functional-open-prayer"),
+            ) {
+                Text(stringResource(R.string.feature_now_functional_open_prayer))
+            }
+        }
+    }
+}
+
+@Composable
+private fun ServiceAgendaCard(
+    selection: ServiceSelectionResult,
+    onOpenService: (String) -> Unit,
+) {
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("now-service-agenda"),
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.feature_now_services_title),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.semantics { heading() },
+            )
+            when (selection) {
+                is ServiceSelectionResult.Blocked -> {
+                    Text(
+                        text = stringResource(R.string.feature_now_services_context_needed),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    selection.reasons.forEach { reason ->
+                        Text(
+                            text = "${reason.title.fallbackEnglish}: ${reason.detail.fallbackEnglish}",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        reason.suggestedAction?.let { action ->
+                            Text(
+                                text = action.fallbackEnglish,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    }
+                }
+                is ServiceSelectionResult.Available -> ServiceAgendaContents(
+                    agenda = selection.agenda,
+                    onOpenService = onOpenService,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ServiceAgendaContents(
+    agenda: ServiceAgenda,
+    onOpenService: (String) -> Unit,
+) {
+    Text(
+        text = agenda.catalogNotice.fallbackEnglish,
+        style = MaterialTheme.typography.bodySmall,
+    )
+    val visible = agenda.upcomingServices.take(5)
+    if (visible.isEmpty()) {
+        Text(stringResource(R.string.feature_now_services_none))
+        agenda.nextServiceUnavailableReason?.let { reason ->
+            Text(reason.detail.fallbackEnglish)
+        }
+        return
+    }
+    visible.forEach { service ->
+        ScheduledServiceRow(
+            service = service,
+            onOpen = { onOpenService(service.id) },
+        )
+    }
+    if (agenda.upcomingServices.size > visible.size) {
+        Text(
+            text = stringResource(
+                R.string.feature_now_services_more,
+                agenda.upcomingServices.size - visible.size,
+            ),
+            style = MaterialTheme.typography.bodySmall,
+        )
+    }
+}
+
+@Composable
+private fun ScheduledServiceRow(
+    service: DatedServiceInstance,
+    onOpen: () -> Unit,
+) {
+    Surface(
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("now-service-${service.id}"),
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            Text(
+                text = service.definition.title.fallbackEnglish,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(serviceTimeFormatter.format(service.startsAt))
+            Text(
+                text = service.calendarDay.label.fallbackEnglish,
+                style = MaterialTheme.typography.labelMedium,
+            )
+            service.calendarAdditions.forEach { addition ->
+                Text(
+                    text = addition.title.fallbackEnglish,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            val statusText = when (service.availability.status) {
+                ServiceAvailabilityStatus.AVAILABLE ->
+                    stringResource(R.string.feature_now_service_available)
+                ServiceAvailabilityStatus.PLANNING_ONLY ->
+                    stringResource(R.string.feature_now_service_planning_only)
+                ServiceAvailabilityStatus.BLOCKED ->
+                    stringResource(R.string.feature_now_service_blocked)
+            }
+            Text(
+                text = statusText,
+                style = MaterialTheme.typography.labelLarge,
+            )
+            service.availability.reasons.firstOrNull()?.let { reason ->
+                Text(
+                    text = reason.detail.fallbackEnglish,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            OutlinedButton(
+                onClick = onOpen,
+                enabled = service.availability.status != ServiceAvailabilityStatus.BLOCKED,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .testTag("now-service-action-${service.id}"),
+            ) {
+                Text(stringResource(R.string.feature_now_choose_service))
+            }
+        }
+    }
+}
+
+@Composable
+private fun JourneyCard(
+    summary: NowJourneySummary,
+    onSetLocation: () -> Unit,
+    onOpenPractice: () -> Unit,
+    onOpenPrayer: () -> Unit,
+    onOpenBuild: () -> Unit,
+) {
+    val total = summary.practiceTotal + summary.serviceTotal
+    val completed = summary.practiceCompleted + summary.serviceCompleted
+    val progress = if (total == 0) 0f else completed.toFloat() / total.toFloat()
+    val onNextAction = when (summary.nextAction) {
+        NowJourneyAction.LOCATION -> onSetLocation
+        NowJourneyAction.PRACTICE -> onOpenPractice
+        NowJourneyAction.PRAYER -> onOpenPrayer
+        NowJourneyAction.BUILD -> onOpenBuild
+    }
+
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("now-journey"),
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.feature_now_journey_title),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.semantics { heading() },
+            )
+            Text(
+                text = stringResource(R.string.feature_now_journey_scope),
+                style = MaterialTheme.typography.labelLarge,
+            )
+            Text("${summary.dateLabel} · ${summary.locationLabel}")
+            Text(stringResource(R.string.feature_now_journey_workspace, summary.workspaceLabel))
+            LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                text = stringResource(
+                    R.string.feature_now_journey_progress,
+                    summary.practiceCompleted,
+                    summary.practiceTotal,
+                    summary.serviceCompleted,
+                    summary.serviceTotal,
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Surface(
+                shape = MaterialTheme.shapes.medium,
+                color = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("now-next-step"),
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.feature_now_journey_next_step),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = summary.nextActionTitle,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = summary.nextActionDetail,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
+            Button(
+                onClick = onNextAction,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .testTag("now-next-action"),
+            ) {
+                Text(summary.nextActionTitle)
+            }
+            Button(
+                onClick = onOpenPrayer,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp),
+            ) {
+                Text(stringResource(R.string.feature_now_journey_open_rehearsal))
+            }
+            OutlinedButton(
+                onClick = onOpenBuild,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp),
+            ) {
+                Text(stringResource(R.string.feature_now_journey_open_build))
+            }
         }
     }
 }
@@ -788,6 +1228,19 @@ private fun DevicePlaceEditor(
     var saveFailed by remember { mutableStateOf(false) }
     var clearFailed by remember { mutableStateOf(false) }
     var showTechnicalDetails by remember { mutableStateOf(false) }
+    var showAdvancedLocationOptions by remember { mutableStateOf(false) }
+
+    val locationFailed = when (state) {
+        is DeviceLocationUiState.PermissionDenied,
+        DeviceLocationUiState.LocationDisabled,
+        DeviceLocationUiState.TimedOut,
+        DeviceLocationUiState.Unavailable,
+        -> true
+
+        else -> false
+    }
+    val canExpandAdvancedLocationOptions =
+        state == DeviceLocationUiState.Idle || state is DeviceLocationUiState.Preview
 
     Surface(
         modifier = Modifier
@@ -1045,9 +1498,29 @@ private fun DevicePlaceEditor(
                 }
             }
 
-            if (state != DeviceLocationUiState.Locating &&
-                state !is DeviceLocationUiState.Preview
-            ) {
+            if (canExpandAdvancedLocationOptions) {
+                TextButton(
+                    onClick = {
+                        showAdvancedLocationOptions = !showAdvancedLocationOptions
+                    },
+                    enabled = !operationInProgress,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .testTag("now-advanced-location-options"),
+                ) {
+                    Text(
+                        text = stringResource(
+                            if (showAdvancedLocationOptions) {
+                                R.string.feature_now_hide_advanced_location_options
+                            } else {
+                                R.string.feature_now_show_advanced_location_options
+                            },
+                        ),
+                    )
+                }
+            }
+            if (locationFailed || showAdvancedLocationOptions) {
                 OutlinedButton(
                     onClick = onUseManual,
                     enabled = !operationInProgress,

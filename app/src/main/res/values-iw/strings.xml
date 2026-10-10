@@ -2,9 +2,26 @@
 <resources>
   <!-- The approved alpha has no reviewed Hebrew interface translation yet. -->
   <string name="app_place_context_missing_title">&#x2066;EN · No place set&#x2069;</string>
-  <string name="app_place_context_missing_summary">&#x2066;EN · Use this device’s location to calculate Jewish dates and solar times offline.&#x2069;</string>
+  <string name="app_place_context_missing_summary">&#x2066;EN · Tap to use device GPS&#x2069;</string>
   <string name="app_place_context_active_title">&#x2066;EN · Active place&#x2069;</string>
   <string name="app_place_context_device_label">&#x2066;EN · Saved device location&#x2069;</string>
   <string name="app_place_context_setup">&#x2066;EN · Set up place&#x2069;</string>
   <string name="app_place_context_change">&#x2066;EN · Change place&#x2069;</string>
+  <string name="app_global_context_value">&#x2066;EN · Context · %1$s&#x2069;</string>
+  <string name="app_global_search">&#x2066;EN · Search&#x2069;</string>
+  <string name="app_context_dialog_title">&#x2066;EN · Change context&#x2069;</string>
+  <string name="app_context_dialog_detail">&#x2066;EN · Choose which local workspace ASEH should use across Now, Practice, Pray, Study, and Build.&#x2069;</string>
+  <string name="app_context_self">&#x2066;EN · Self&#x2069;</string>
+  <string name="app_context_household">&#x2066;EN · Household&#x2069;</string>
+  <string name="app_context_qahal">&#x2066;EN · Qahal&#x2069;</string>
+  <string name="app_search_label">&#x2066;EN · Search ASEH&#x2069;</string>
+  <string name="app_search_supporting">&#x2066;EN · Searches locally; no network request is made.&#x2069;</string>
+  <string name="app_search_prompt">&#x2066;EN · Search your responsibilities, calendar, decisions, inventory, practices, services, and sources.&#x2069;</string>
+  <string name="app_search_empty">&#x2066;EN · No local result matches every search word.&#x2069;</string>
+  <string name="app_search_english_fallback">&#x2066;EN · %1$s&#x2069;</string>
+  <string name="app_close">&#x2066;EN · Close&#x2069;</string>
+  <string name="workspace_mode_operations_title">&#x2066;EN · Workspace operations&#x2069;</string>
+  <string name="workspace_mode_service_title">&#x2066;EN · Service rehearsal setup&#x2069;</string>
+  <string name="workspace_mode_operations_action">&#x2066;EN · Workspace work&#x2069;</string>
+  <string name="workspace_mode_service_action">&#x2066;EN · Service setup&#x2069;</string>
 </resources>

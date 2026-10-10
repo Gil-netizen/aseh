@@ -1,9 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="feature_now_functional_review_title">Weekday prayer is ready</string>
+    <string name="feature_now_functional_review_body">Pray Shacharit, Mincha, or Arvit from the complete offline Hebrew reader. ASEH suggests one from local time, and you can choose any service.</string>
+    <string name="feature_now_functional_open_prayer">Open weekday prayer</string>
+    <string name="feature_now_functional_open_practice">Open preparation guides</string>
+    <string name="feature_now_functional_open_build">Open workspace tools</string>
     <string name="feature_now_title">Now</string>
-    <string name="feature_now_summary">Use this device’s location to calculate today’s Jewish date and solar times offline.</string>
-    <string name="feature_now_summary_loading">Loading saved place context. Civil date and time remain available offline.</string>
-    <string name="feature_now_summary_place">Jewish date and solar times for the active place, calculated on this device.</string>
+    <string name="feature_now_summary">Pray Shacharit, Mincha, and Arvit offline. Device location adds today’s Jewish date and local solar times.</string>
+    <string name="feature_now_summary_loading">Loading your saved location. Weekday prayer remains available offline.</string>
+    <string name="feature_now_summary_place">Weekday prayer and local calendar context are ready on this device.</string>
+    <string name="feature_now_journey_title">Prepare the Shabbat rehearsal</string>
+    <string name="feature_now_journey_scope">Functional review workflow · synthetic evidence fixtures · service text withheld pending an approved licensed edition</string>
+    <string name="feature_now_journey_workspace">Workspace: %1$s</string>
+    <string name="feature_now_journey_progress">Preparation %1$d/%2$d · service %3$d/%4$d</string>
+    <string name="feature_now_journey_next_step">Next required step</string>
+    <string name="feature_now_journey_open_rehearsal">Open service rehearsal</string>
+    <string name="feature_now_journey_open_build">Review team, readings, charter, and export</string>
     <string name="feature_now_civil_date_label">Civil date</string>
     <string name="feature_now_weekday_label">Weekday</string>
     <string name="feature_now_local_time_label">Local time</string>
@@ -41,7 +53,7 @@
     <string name="feature_now_elevation_label">Elevation</string>
     <string name="feature_now_elevation_meters">%1$s meters</string>
     <string name="feature_now_not_set">Not set</string>
-    <string name="feature_now_set_up_place">Set up place</string>
+    <string name="feature_now_set_up_place">Use my location</string>
     <string name="feature_now_change_context">Change context</string>
     <string name="feature_now_refresh_device_location">Refresh device location</string>
     <string name="feature_now_location_options">Location options</string>
@@ -58,6 +70,8 @@
     <string name="feature_now_retry_location">Retry location</string>
     <string name="feature_now_open_app_settings">Open app settings</string>
     <string name="feature_now_open_location_settings">Open location settings</string>
+    <string name="feature_now_show_advanced_location_options">Show advanced location options</string>
+    <string name="feature_now_hide_advanced_location_options">Hide advanced location options</string>
     <string name="feature_now_enter_manually">Enter coordinates manually</string>
     <string name="feature_now_manual_editor_title">Advanced: enter coordinates</string>
     <string name="feature_now_manual_editor_explanation">Use this fallback when device location is unavailable or when you need a different place. ASEH saves it only after you choose Save.</string>
@@ -90,4 +104,17 @@
     <string name="feature_now_save_persistence_error">The place context could not be saved on this device. Your draft is still here; try again or cancel.</string>
     <string name="feature_now_clear_persistence_error">The saved place context could not be cleared on this device. Try again or cancel.</string>
     <string name="feature_now_refresh">Refresh date and time</string>
+    <string name="feature_now_services_title">Services and preparation</string>
+    <string name="feature_now_services_context_needed">Confirm place and calendar profile before ASEH schedules services.</string>
+    <string name="feature_now_services_none">No upcoming service was found in the current planning window.</string>
+    <string name="feature_now_services_more">%1$d more upcoming services are available in Pray.</string>
+    <string name="feature_now_service_available">Conducting content available</string>
+    <string name="feature_now_service_planning_only">Planning only</string>
+    <string name="feature_now_service_blocked">Blocked</string>
+    <string name="feature_now_choose_service">Review service plan</string>
+    <string name="feature_now_workspace_title">%1$s work</string>
+    <string name="feature_now_workspace_none_due">No active item is due in the next seven days.</string>
+    <string name="feature_now_workspace_due_count">%1$d active items need attention.</string>
+    <string name="feature_now_workspace_due_item">%1$s · %2$s · %3$s</string>
+    <string name="feature_now_workspace_open">Open workspace</string>
 </resources>

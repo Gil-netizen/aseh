@@ -2,7 +2,7 @@
 
 Status: Draft rights inventory
 
-Last metadata verification: 2026-10-06
+Last metadata verification: 2026-10-10 for the Baladi Wikisource research witness; 2026-10-06 for the Sefaria pilot records
 
 ## Project licensing posture
 
@@ -30,6 +30,7 @@ These records were checked against live Sefaria version metadata on 2026-10-06. 
 | `rambam_prayer_blessing_en_sefaria` | Mishneh Torah, Prayer and the Priestly Blessing | English | `Sefaria Community Translation` | Sefaria | `CC0` | Conditional: preserve CC0 source/provenance record |
 | `tanakh_he_miqra_masorah` | Tanakh | Hebrew | `Miqra according to the Masorah` | Sefaria metadata; upstream he.wikisource.org | `CC-BY-SA` | Conditional: verify each included book and record exact CC version/attribution |
 | `tanakh_en_jps_1917` | Tanakh | English | `The Holy Scriptures: A New Translation (JPS 1917)` | Sefaria metadata; upstream Open Siddur record | `Public Domain` | Conditional: verify each included book and record provenance/jurisdiction note |
+| `wikisource_yemenite_baladi_weekday_research_20261010` | Siddur, Yemenite Baladi weekday Shacharit, Mincha, and Arvit | Hebrew | Collaborative Hebrew Wikisource pages pinned at revisions `3081633`, `1076941`, and `2947373` | [Pinned manifest](../content/sources/baladi-wikisource/manifest.json); upstream Hebrew Wikisource revision histories | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) | Development research only; `Drafted`; no human rights or editorial approval; not distribution-approved |
 
 "Conditional" means the edition identity is allowlisted for pilot ingestion and evaluation, while a public pack remains blocked until the full provenance manifest, exact notices, checksums, and required attribution are present. It is not a finding that the source may be used without conditions.
 
@@ -40,6 +41,23 @@ canonical liturgical anchor, or authorize public distribution before the named
 human rights review in `RIGHTS-004`.
 
 Sefaria is the retrieval provider for these records, not a blanket license for all Sefaria content. License status is version-specific and language-specific. The importer must request the exact `versionTitle`, reject substitution or merge behavior, and retain the source's own metadata.
+
+The Baladi record is a completion witness for the development reader, not a
+named historical edition or a selected canonical Nusach HaRambam. The pinned
+Rambam Order of Prayer revisions remain the structural and textual research
+anchor; the Baladi pages supply readable text where that witness abbreviates
+familiar passages. The UI and exports must attribute Hebrew Wikisource
+contributors and preserve the CC BY-SA 4.0 notice without attributing the
+completed composite solely to Rambam. `LITURGY-001` remains open.
+
+The machine-readable source record is
+[`content/sources/baladi-wikisource/manifest.json`](../content/sources/baladi-wikisource/manifest.json).
+It records the revision URLs, retrieval date, transformations, attribution, and
+these SHA-256 digests:
+
+- Shacharit revision `3081633`: wikitext `a0e604e2b3f9759e52a1be7e2bae044fff1e059b827404dc67e2a4aa2d5f9ed3`, rendered snapshot `cf4f03985e7fc2a04d2d19b38d563daafbfc4fb680ea9348a0a76f40f72fd2a3`, display text `2f94285a0fa3bdfe2d3ec32e2904f42bb8fc89b5aa55f5c5a8ac07ca1809616d`.
+- Mincha revision `1076941`: wikitext `3c3c5dae275c1369434e05e05cd3538195089c7c1225f64f01131da28b464c2e`, display text `5d90d46c1dcbca7d2f68b52c0efde6bb05a9738856a1bcbf52ba3b1d92f7eb0f`.
+- Arvit revision `2947373`: wikitext `669419675c49680cc1860d676d5928dd731b7adde5826a308511963bcf6f23e6`, display text `4827c463bcc1e8fc04e6a5931fbf47871ca36fad74fa93a90c13744d5f168359`.
 
 ## Excluded or permission-required material
 
