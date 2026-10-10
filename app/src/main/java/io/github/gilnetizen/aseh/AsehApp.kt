@@ -70,6 +70,7 @@ import io.github.gilnetizen.aseh.core.model.practiceProgress
 import io.github.gilnetizen.aseh.core.model.serviceAssemblyContext
 import io.github.gilnetizen.aseh.core.model.serviceDateLabel
 import io.github.gilnetizen.aseh.core.model.serviceProgress
+import io.github.gilnetizen.aseh.core.model.suggestedIndividualPrayerKind
 import io.github.gilnetizen.aseh.core.model.withoutServiceInstanceProgress
 import io.github.gilnetizen.aseh.core.ui.AsehAdaptiveNavigationShell
 import io.github.gilnetizen.aseh.core.ui.AsehDestination
@@ -144,7 +145,7 @@ fun AsehApp(
   manualPlaceContextRepository: ManualPlaceContextRepository,
   experienceStateRepository: ExperienceStateRepository? = null,
   contentCatalog: DemonstratorCatalog? = null,
-  individualPrayerService: IndividualPrayerService? = null,
+  individualPrayerServices: List<IndividualPrayerService> = emptyList(),
   serviceCatalog: ServiceCatalog? = null,
   workspaceReviewStateRepository: WorkspaceReviewStateRepository? = null,
   deviceLocationClient: DeviceLocationClient? = null,
@@ -198,6 +199,9 @@ fun AsehApp(
   var workspaceRejectedIssues by remember { mutableStateOf<List<WorkspaceIssue>>(emptyList()) }
   var workspacePersistenceFailed by remember { mutableStateOf(false) }
   var selectedScheduledServiceIdOverride by rememberSaveable { mutableStateOf<String?>(null) }
+  var selectedIndividualPrayerServiceIdOverride by rememberSaveable {
+    mutableStateOf<String?>(null)
+  }
   var requestedLocationPermissionBefore by rememberSaveable { mutableStateOf(false) }
   var permissionWasPreviouslyRequestedForCurrentLaunch by rememberSaveable {
     mutableStateOf(false)
@@ -485,8 +489,31 @@ fun AsehApp(
     selectedScheduledService?.id ?: requestedScheduledServiceId
   val selectedServiceInstanceKey = selectedScheduledService
     ?.rehearsalServiceInstanceKeyOrNull()
-  val individualPrayerInstanceKey = remember(individualPrayerService, experienceLocalDate) {
-    individualPrayerService?.let { service ->
+  val suggestedPrayerKind = suggestedIndividualPrayerKind(
+    serviceScheduleInstant.atZone(experienceZone).toLocalTime(),
+  )
+  val suggestedIndividualPrayerService = remember(
+    individualPrayerServices,
+    suggestedPrayerKind,
+  ) {
+    individualPrayerServices.firstOrNull { service ->
+      service.kind == suggestedPrayerKind
+    }
+  }
+  val selectedIndividualPrayerService = remember(
+    individualPrayerServices,
+    selectedIndividualPrayerServiceIdOverride,
+    suggestedIndividualPrayerService,
+  ) {
+    selectedIndividualPrayerServiceIdOverride?.let { selectedId ->
+      individualPrayerServices.firstOrNull { service -> service.id == selectedId }
+    } ?: suggestedIndividualPrayerService ?: individualPrayerServices.firstOrNull()
+  }
+  val individualPrayerInstanceKey = remember(
+    selectedIndividualPrayerService,
+    experienceLocalDate,
+  ) {
+    selectedIndividualPrayerService?.let { service ->
       individualPrayerServiceInstanceKey(service, experienceLocalDate)
     }
   }
@@ -998,9 +1025,9 @@ fun AsehApp(
                   }
                   if (cleared) deviceLocationState = DeviceLocationUiState.Idle
                 },
-                journeySummary = journeySummary,
-                workspaceSummary = workspaceSummary,
-                serviceSelection = serviceSelection,
+                journeySummary = journeySummary.takeIf { individualPrayerServices.isEmpty() },
+                workspaceSummary = workspaceSummary.takeIf { individualPrayerServices.isEmpty() },
+                serviceSelection = serviceSelection.takeIf { individualPrayerServices.isEmpty() },
                 showFunctionalReviewNotice = contentCatalog != null,
                 onOpenService = { serviceId ->
                   selectedServiceWriteKey.set(null)
@@ -1052,12 +1079,33 @@ fun AsehApp(
                 },
                 onOpenPrayer = { navigateTo(AsehDestination.PRAYER) },
               )
-              AsehDestination.PRAYER -> if (individualPrayerService != null) {
+              AsehDestination.PRAYER -> if (selectedIndividualPrayerService != null) {
                 IndividualPrayerScreen(
-                  service = individualPrayerService,
+                  services = individualPrayerServices,
+                  selectedServiceId = selectedIndividualPrayerService.id,
+                  suggestedServiceId = suggestedIndividualPrayerService?.id,
                   state = individualPrayerExperienceState,
                   dateLabel = serviceDateLabel(experienceLocalDate),
-                  locationLabel = experienceLocationLabel,
+                  locationLabel = if (storedManualPlaceContext == null) {
+                    ""
+                  } else {
+                    experienceLocationLabel
+                  },
+                  onServiceSelected = { serviceId ->
+                    if (individualPrayerServices.any { service -> service.id == serviceId }) {
+                      individualPrayerWriteKey.set(null)
+                      selectedIndividualPrayerServiceIdOverride = serviceId
+                    }
+                  },
+                  onUseDeviceLocation = if (deviceLocationClient != null) {
+                    {
+                      navigateTo(AsehDestination.NOW)
+                      openPlaceEditorRequest += 1
+                      requestDeviceLocation()
+                    }
+                  } else {
+                    null
+                  },
                   onSegmentCompleted = { id, completed ->
                     dispatchServiceOccurrenceWrite(individualPrayerWriteKey.get()) { serviceInstance ->
                       launchUserDataMutation {
@@ -1075,7 +1123,7 @@ fun AsehApp(
                   onPrintPacket = { packet ->
                     printServicePacket(
                       context = context,
-                      title = "ASEH weekday individual prayer",
+                      title = "ASEH ${selectedIndividualPrayerService.title}",
                       packet = packet,
                       largeText = individualPrayerExperienceState.accessibilityProfile.useLargeText,
                     )

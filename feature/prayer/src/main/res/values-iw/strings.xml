@@ -165,6 +165,14 @@
     <string name="feature_prayer_review_service">&#x2066;EN · Select for planning&#x2069;</string>
     <string name="individual_prayer_unavailable_title">תפילת היחיד אינה זמינה</string>
     <string name="individual_prayer_unavailable_body">גרסה זו אינה כוללת סדר תפילת יחיד מותקן.</string>
+    <string name="individual_prayer_choose_service">בחירת תפילת חול</string>
+    <string name="individual_prayer_choose_service_help">שחרית, מנחה וערבית זמינות גם ללא חיבור לרשת. ההצעה מבוססת רק על השעה המקומית; אפשר לבחור כל תפילה.</string>
+    <string name="individual_prayer_service_selected">נבחרה</string>
+    <string name="individual_prayer_service_not_selected">לא נבחרה</string>
+    <string name="individual_prayer_service_suggested_local_time">מוצעת לפי השעה המקומית</string>
+    <string name="individual_prayer_location_optional_title">המיקום אינו חובה</string>
+    <string name="individual_prayer_location_optional_body">אפשר להתפלל גם ללא חיבור לרשת וללא מיקום שמור. ASEH מבקש תוצאת מיקום נוכחית אחת, אינו שולח אותה, אינו פועל ברקע ומבקש אישור לפני השמירה.</string>
+    <string name="individual_prayer_use_device_location">הגדרת מיקום מהמכשיר</string>
     <string name="individual_prayer_start">התחלת התפילה</string>
     <string name="individual_prayer_resume">המשך התפילה</string>
     <string name="individual_prayer_review">עיון חוזר בתפילה</string>

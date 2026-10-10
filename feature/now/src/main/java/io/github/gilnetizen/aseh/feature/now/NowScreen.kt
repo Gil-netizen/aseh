@@ -348,9 +348,7 @@ fun NowScreen(
 
         if (showFunctionalReviewNotice && !editingPlace) {
             FunctionalReviewCard(
-                onOpenPractice = onOpenPractice,
                 onOpenPrayer = onOpenPrayer,
-                onOpenBuild = onOpenBuild,
             )
         }
 
@@ -525,9 +523,7 @@ private fun WorkspaceDueCard(
 
 @Composable
 private fun FunctionalReviewCard(
-    onOpenPractice: () -> Unit,
     onOpenPrayer: () -> Unit,
-    onOpenBuild: () -> Unit,
 ) {
     Surface(
         shape = MaterialTheme.shapes.large,
@@ -559,24 +555,6 @@ private fun FunctionalReviewCard(
                     .testTag("now-functional-open-prayer"),
             ) {
                 Text(stringResource(R.string.feature_now_functional_open_prayer))
-            }
-            OutlinedButton(
-                onClick = onOpenPractice,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 48.dp)
-                    .testTag("now-functional-open-practice"),
-            ) {
-                Text(stringResource(R.string.feature_now_functional_open_practice))
-            }
-            OutlinedButton(
-                onClick = onOpenBuild,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 48.dp)
-                    .testTag("now-functional-open-build"),
-            ) {
-                Text(stringResource(R.string.feature_now_functional_open_build))
             }
         }
     }
@@ -1250,6 +1228,19 @@ private fun DevicePlaceEditor(
     var saveFailed by remember { mutableStateOf(false) }
     var clearFailed by remember { mutableStateOf(false) }
     var showTechnicalDetails by remember { mutableStateOf(false) }
+    var showAdvancedLocationOptions by remember { mutableStateOf(false) }
+
+    val locationFailed = when (state) {
+        is DeviceLocationUiState.PermissionDenied,
+        DeviceLocationUiState.LocationDisabled,
+        DeviceLocationUiState.TimedOut,
+        DeviceLocationUiState.Unavailable,
+        -> true
+
+        else -> false
+    }
+    val canExpandAdvancedLocationOptions =
+        state == DeviceLocationUiState.Idle || state is DeviceLocationUiState.Preview
 
     Surface(
         modifier = Modifier
@@ -1507,15 +1498,39 @@ private fun DevicePlaceEditor(
                 }
             }
 
-            OutlinedButton(
-                onClick = onUseManual,
-                enabled = !operationInProgress,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 48.dp)
-                    .testTag("now-enter-location-manually"),
-            ) {
-                Text(text = stringResource(R.string.feature_now_enter_manually))
+            if (canExpandAdvancedLocationOptions) {
+                TextButton(
+                    onClick = {
+                        showAdvancedLocationOptions = !showAdvancedLocationOptions
+                    },
+                    enabled = !operationInProgress,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .testTag("now-advanced-location-options"),
+                ) {
+                    Text(
+                        text = stringResource(
+                            if (showAdvancedLocationOptions) {
+                                R.string.feature_now_hide_advanced_location_options
+                            } else {
+                                R.string.feature_now_show_advanced_location_options
+                            },
+                        ),
+                    )
+                }
+            }
+            if (locationFailed || showAdvancedLocationOptions) {
+                OutlinedButton(
+                    onClick = onUseManual,
+                    enabled = !operationInProgress,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .testTag("now-enter-location-manually"),
+                ) {
+                    Text(text = stringResource(R.string.feature_now_enter_manually))
+                }
             }
             OutlinedButton(
                 onClick = onCancel,

@@ -19,7 +19,7 @@ class MainActivity : AppCompatActivity() {
         manualPlaceContextRepository = graph.manualPlaceContextRepository,
         experienceStateRepository = graph.experienceStateRepository,
         contentCatalog = graph.contentCatalog,
-        individualPrayerService = graph.individualPrayerService,
+        individualPrayerServices = graph.individualPrayerServices,
         serviceCatalog = graph.serviceCatalog,
         workspaceReviewStateRepository = graph.workspaceReviewStateRepository,
         deviceLocationClient = graph.deviceLocationClient,

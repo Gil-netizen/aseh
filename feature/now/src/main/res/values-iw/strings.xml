@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="feature_now_functional_review_title">&#x2066;EN · Alpha 8 functional review&#x2069;</string>
-    <string name="feature_now_functional_review_body">&#x2066;EN · This build includes interactive preparation guides, a service chooser and conductor, offline source search, role and reading assignments, local governance records, and packet share/print.&#x2069;</string>
-    <string name="feature_now_functional_open_prayer">&#x2066;EN · Open service conductor&#x2069;</string>
+    <string name="feature_now_functional_review_title">תפילות החול מוכנות</string>
+    <string name="feature_now_functional_review_body">אפשר להתפלל שחרית, מנחה או ערבית מתוך קורא עברי מלא שפועל ללא חיבור. ASEH מציעה תפילה לפי השעה המקומית, ותמיד אפשר לבחור תפילה אחרת.</string>
+    <string name="feature_now_functional_open_prayer">פתיחת תפילות החול</string>
     <string name="feature_now_functional_open_practice">&#x2066;EN · Open preparation guides&#x2069;</string>
     <string name="feature_now_functional_open_build">&#x2066;EN · Open workspace tools&#x2069;</string>
-    <string name="feature_now_title">&#x2066;EN · Now&#x2069;</string>
-    <string name="feature_now_summary">&#x2066;EN · Prepare, rehearse, study, and plan a Shabbat service offline. Device location adds today’s Jewish date and solar times.&#x2069;</string>
-    <string name="feature_now_summary_loading">&#x2066;EN · Loading saved place context. Civil date and time remain available offline.&#x2069;</string>
-    <string name="feature_now_summary_place">&#x2066;EN · Your Shabbat rehearsal workspace is ready. Date and solar details are calculated on this device.&#x2069;</string>
+    <string name="feature_now_title">עכשיו</string>
+    <string name="feature_now_summary">שחרית, מנחה וערבית זמינות ללא חיבור. מיקום המכשיר מוסיף תאריך עברי וזמנים מקומיים.</string>
+    <string name="feature_now_summary_loading">המיקום השמור נטען. תפילות החול זמינות גם ללא חיבור.</string>
+    <string name="feature_now_summary_place">תפילות החול וההקשר המקומי מוכנים במכשיר הזה.</string>
     <string name="feature_now_journey_title">&#x2066;EN · Prepare the Shabbat rehearsal&#x2069;</string>
     <string name="feature_now_journey_scope">&#x2066;EN · Functional review workflow · synthetic evidence fixtures · service text withheld pending an approved licensed edition&#x2069;</string>
     <string name="feature_now_journey_workspace">&#x2066;EN · Workspace: %1$s&#x2069;</string>
@@ -70,6 +70,8 @@
     <string name="feature_now_retry_location">&#x2066;EN · Retry location&#x2069;</string>
     <string name="feature_now_open_app_settings">&#x2066;EN · Open app settings&#x2069;</string>
     <string name="feature_now_open_location_settings">&#x2066;EN · Open location settings&#x2069;</string>
+    <string name="feature_now_show_advanced_location_options">&#x2066;EN · Show advanced location options&#x2069;</string>
+    <string name="feature_now_hide_advanced_location_options">&#x2066;EN · Hide advanced location options&#x2069;</string>
     <string name="feature_now_enter_manually">&#x2066;EN · Enter coordinates manually&#x2069;</string>
     <string name="feature_now_manual_editor_title">&#x2066;EN · Advanced: enter coordinates&#x2069;</string>
     <string name="feature_now_manual_editor_explanation">&#x2066;EN · Use this fallback when device location is unavailable or when you need a different place. ASEH saves it only after you choose Save.&#x2069;</string>

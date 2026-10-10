@@ -1,5 +1,27 @@
 package io.github.gilnetizen.aseh.core.model
 
+import java.time.LocalTime
+
+enum class IndividualPrayerKind {
+    SHACHARIT,
+    MINCHA,
+    ARVIT,
+}
+
+/**
+ * Returns a clock-based UX suggestion for the prayer chooser.
+ *
+ * These fixed local-time bands are only a navigation convenience. They do not establish that a
+ * service is halakhically available, and the user can always choose another installed service.
+ */
+fun suggestedIndividualPrayerKind(localTime: LocalTime): IndividualPrayerKind = when {
+    localTime >= LocalTime.of(4, 0) && localTime < LocalTime.NOON ->
+        IndividualPrayerKind.SHACHARIT
+    localTime >= LocalTime.NOON && localTime < LocalTime.of(18, 0) ->
+        IndividualPrayerKind.MINCHA
+    else -> IndividualPrayerKind.ARVIT
+}
+
 /**
  * One offline individual-prayer service in its fixed editorial order.
  *
@@ -8,6 +30,7 @@ package io.github.gilnetizen.aseh.core.model
  */
 data class IndividualPrayerService(
     val id: String,
+    val kind: IndividualPrayerKind,
     val title: String,
     val subtitle: String,
     val notice: String,

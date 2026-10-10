@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -31,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -53,15 +56,22 @@ import io.github.gilnetizen.aseh.core.model.buildIndividualPrayerPacket
 /** A Hebrew-first, sequential reader for an individual's offline prayer service. */
 @Composable
 fun IndividualPrayerScreen(
-    service: IndividualPrayerService?,
+    services: List<IndividualPrayerService>,
+    selectedServiceId: String?,
+    suggestedServiceId: String?,
+    onServiceSelected: (String) -> Unit,
     state: ExperienceState = ExperienceState(),
     dateLabel: String = "",
     locationLabel: String = "",
+    onUseDeviceLocation: (() -> Unit)? = null,
     onSegmentCompleted: (String, Boolean) -> Unit = { _, _ -> },
     onSharePacket: (String) -> Unit = {},
     onPrintPacket: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    val service = services.firstOrNull { it.id == selectedServiceId }
+        ?: services.firstOrNull { it.id == suggestedServiceId }
+        ?: services.firstOrNull()
     if (service == null) {
         IndividualPrayerUnavailable(modifier)
         return
@@ -98,10 +108,14 @@ fun IndividualPrayerScreen(
     }
 
     IndividualPrayerOverview(
+        services = services,
         service = service,
+        suggestedServiceId = suggestedServiceId,
         completedIds = completedIds,
         dateLabel = dateLabel,
         locationLabel = locationLabel,
+        onServiceSelected = onServiceSelected,
+        onUseDeviceLocation = onUseDeviceLocation,
         onBegin = {
             currentIndex = firstIncompleteSegmentIndex(service.segments, completedIds)
             readerOpen = true
@@ -135,10 +149,14 @@ private fun IndividualPrayerUnavailable(modifier: Modifier) {
 
 @Composable
 private fun IndividualPrayerOverview(
+    services: List<IndividualPrayerService>,
     service: IndividualPrayerService,
+    suggestedServiceId: String?,
     completedIds: Set<String>,
     dateLabel: String,
     locationLabel: String,
+    onServiceSelected: (String) -> Unit,
+    onUseDeviceLocation: (() -> Unit)?,
     onBegin: () -> Unit,
     onSharePacket: () -> Unit,
     onPrintPacket: () -> Unit,
@@ -158,6 +176,14 @@ private fun IndividualPrayerOverview(
         contentPadding = PaddingValues(start = 24.dp, top = 28.dp, end = 24.dp, bottom = 48.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
+        item {
+            ServiceChooser(
+                services = services,
+                selectedServiceId = service.id,
+                suggestedServiceId = suggestedServiceId,
+                onServiceSelected = onServiceSelected,
+            )
+        }
         item {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
@@ -203,6 +229,11 @@ private fun IndividualPrayerOverview(
                         .semantics { liveRegion = LiveRegionMode.Polite }
                         .testTag("individual-prayer-progress"),
                 )
+            }
+        }
+        if (locationLabel.isBlank()) {
+            item {
+                MissingLocationCard(onUseDeviceLocation = onUseDeviceLocation)
             }
         }
         item {
@@ -294,6 +325,126 @@ private fun IndividualPrayerOverview(
                         .testTag("individual-prayer-print"),
                 ) {
                     Text(stringResource(R.string.individual_prayer_print))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ServiceChooser(
+    services: List<IndividualPrayerService>,
+    selectedServiceId: String,
+    suggestedServiceId: String?,
+    onServiceSelected: (String) -> Unit,
+) {
+    val selectedDescription = stringResource(R.string.individual_prayer_service_selected)
+    val notSelectedDescription = stringResource(R.string.individual_prayer_service_not_selected)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .selectableGroup()
+            .testTag("individual-prayer-service-chooser"),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.individual_prayer_choose_service),
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.semantics { heading() },
+        )
+        Text(
+            text = stringResource(R.string.individual_prayer_choose_service_help),
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        services.forEach { option ->
+            val selected = option.id == selectedServiceId
+            Surface(
+                color = if (selected) {
+                    MaterialTheme.colorScheme.primaryContainer
+                } else {
+                    MaterialTheme.colorScheme.surfaceContainer
+                },
+                contentColor = if (selected) {
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+                shape = MaterialTheme.shapes.medium,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 56.dp)
+                    .selectable(
+                        selected = selected,
+                        onClick = { onServiceSelected(option.id) },
+                        role = Role.RadioButton,
+                    )
+                    .semantics {
+                        stateDescription = if (selected) {
+                            selectedDescription
+                        } else {
+                            notSelectedDescription
+                        }
+                    }
+                    .testTag("individual-prayer-service-${option.id}"),
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                ) {
+                    Text(
+                        text = option.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                    )
+                    if (option.id == suggestedServiceId) {
+                        Text(
+                            text = stringResource(
+                                R.string.individual_prayer_service_suggested_local_time,
+                            ),
+                            style = MaterialTheme.typography.labelLarge,
+                        )
+                    }
+                    Text(option.subtitle, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MissingLocationCard(onUseDeviceLocation: (() -> Unit)?) {
+    Surface(
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("individual-prayer-no-location"),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.individual_prayer_location_optional_title),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = stringResource(R.string.individual_prayer_location_optional_body),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            if (onUseDeviceLocation != null) {
+                Button(
+                    onClick = onUseDeviceLocation,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .testTag("individual-prayer-use-device-location"),
+                ) {
+                    Text(stringResource(R.string.individual_prayer_use_device_location))
                 }
             }
         }

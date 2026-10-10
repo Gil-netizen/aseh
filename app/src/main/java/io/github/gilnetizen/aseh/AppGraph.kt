@@ -60,7 +60,7 @@ class AppGraph(context: Context) : Closeable {
     operationalStore.experienceStateRepository
 
   val contentCatalog: DemonstratorCatalog? = flavorContentCatalog()
-  val individualPrayerService: IndividualPrayerService? = flavorIndividualPrayerService()
+  val individualPrayerServices: List<IndividualPrayerService> = flavorIndividualPrayerServices()
   val serviceCatalog: ServiceCatalog? = flavorServiceCatalog()
   val workspaceReviewStateRepository: WorkspaceReviewStateRepository? =
     flavorWorkspaceFixture()?.let { fixture ->

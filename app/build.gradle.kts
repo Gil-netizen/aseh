@@ -17,8 +17,8 @@ android {
     applicationId = "io.github.gilnetizen.aseh"
     minSdk = 26
     targetSdk = 37
-    versionCode = 9
-    versionName = "0.1.0-alpha.9"
+    versionCode = 10
+    versionName = "0.1.0-alpha.10"
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     testInstrumentationRunnerArguments["useTestStorageService"] = "true"
   }
@@ -45,7 +45,7 @@ android {
       // CI debug certificates are intentionally ephemeral. Give this review
       // build its own package so testers can install it beside earlier alphas
       // without an opaque signature-mismatch failure.
-      applicationIdSuffix = ".dev.alpha9"
+      applicationIdSuffix = ".dev.alpha10"
       versionNameSuffix = "-dev"
     }
     create("staging") {

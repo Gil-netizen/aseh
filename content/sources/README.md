@@ -31,3 +31,18 @@ The pages explicitly display “not reviewed.” They are research witnesses, no
 - Changes in the app: HTML presentation elements, non-breaking spacing, page-only documentation annotations, and cantillation marks are removed for a calmer reader; Hebrew letters, vocalization, and verse punctuation are retained.
 
 The raw API responses retain the complete returned metadata so an unexpected edition, language, warning, or license can be detected during review.
+
+## Yemenite Baladi weekday completion witness
+
+Alpha.10 adds pinned Hebrew Wikisource revisions for weekday Shacharit, Mincha,
+and Arvit under `baladi-wikisource/`. These pages provide a complete readable
+development witness where the Rambam Order of Prayer abbreviates familiar
+passages. They are collaborative, unreviewed composites rather than a named
+historical edition, so the app identifies them as a Baladi completion witness
+and never presents them as a settled pure Nusach HaRambam text.
+
+The directory retains the exact wikitext, normalized display text, checksums,
+revision URLs, license, attribution, and transformations. Shacharit also keeps
+the rendered HTML snapshot because its page transcludes subpages and templates.
+The runtime selects individual-prayer passages and omits communal Kaddish,
+repetition, and leader-only cues.

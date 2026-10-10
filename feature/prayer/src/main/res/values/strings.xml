@@ -165,6 +165,14 @@
     <string name="feature_prayer_review_service">Select for planning</string>
     <string name="individual_prayer_unavailable_title">Individual prayer unavailable</string>
     <string name="individual_prayer_unavailable_body">This build does not contain an installed individual prayer service.</string>
+    <string name="individual_prayer_choose_service">Choose a weekday prayer</string>
+    <string name="individual_prayer_choose_service_help">Shacharit, Mincha, and Arvit are available offline. The suggestion only reflects the current local time; choose any service.</string>
+    <string name="individual_prayer_service_selected">Selected</string>
+    <string name="individual_prayer_service_not_selected">Not selected</string>
+    <string name="individual_prayer_service_suggested_local_time">Suggested for the current local time</string>
+    <string name="individual_prayer_location_optional_title">Location is optional</string>
+    <string name="individual_prayer_location_optional_body">Prayer still works offline without a saved location. ASEH requests one current result, sends nothing away, never runs location in the background, and asks before saving.</string>
+    <string name="individual_prayer_use_device_location">Set location from this device</string>
     <string name="individual_prayer_start">Begin prayer</string>
     <string name="individual_prayer_resume">Resume prayer</string>
     <string name="individual_prayer_review">Review prayer</string>
